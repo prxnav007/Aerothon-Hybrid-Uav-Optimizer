@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./aeroprjct/Scripts/python.exe -c ' *)",
+      "Skill(dataviz)",
+      "Skill(dataviz:*)",
+      "Bash(./aeroprjct/Scripts/python.exe -m src.ga_optimization)",
+      "Bash(PYTHONIOENCODING=utf-8 ./aeroprjct/Scripts/python.exe -c ' *)",
+      "Bash(grep -v \"use_container_width\\\\|ScriptRunContext\\\\|^$\\\\|Please replace\\\\|will be removed\\\\|For .use_container\")",
+      "Bash(tasklist //FI \"IMAGENAME eq python.exe\")",
+      "PowerShell($e = Import-Csv data\\\\ga_evaluations.csv; $total = $e.Count; $ok = \\($e | Where-Object {$_.mission_complete -eq 'True'}\\).Count; \"Total evals: $total, Feasible: $ok\"; $b = Import-Csv data\\\\best_simulation_results.csv; \"Best sim rows: $\\($b.Count\\)\"; \\($b | Group-Object phase | Select-Object Name, Count | Format-Table -AutoSize | Out-String\\))",
+      "PowerShell(Get-Content data\\\\best_simulation_results.csv -TotalCount 3; \"\"; Get-Content data\\\\best_simulation_results_new.csv -TotalCount 3; \"\"; $n = Import-Csv data\\\\best_simulation_results_new.csv; \"new rows: $\\($n.Count\\)\"; \\($n | Group-Object phase | Select-Object Name, Count | Format-Table | Out-String\\))",
+      "Bash(git -C /c/Aerothon-Hybrid-Uav-Optimizer log --stat -3 --oneline)",
+      "Bash(./aeroprjct/Scripts/python.exe test.py)",
+      "Bash(./aeroprjct/Scripts/python.exe test_components.py)",
+      "Bash(./aeroprjct/Scripts/python.exe -m src.optimization)",
+      "Bash(./aeroprjct/Scripts/python.exe \"C:\\\\Users\\\\tpmso\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Aerothon-Hybrid-Uav-Optimizer\\\\a6f7139f-63fa-4ae9-9f34-a9db63113d24\\\\scratchpad\\\\probe.py\")",
+      "Bash(./aeroprjct/Scripts/python.exe \"C:\\\\Users\\\\tpmso\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Aerothon-Hybrid-Uav-Optimizer\\\\a6f7139f-63fa-4ae9-9f34-a9db63113d24\\\\scratchpad\\\\probe2.py\")",
+      "Bash(./aeroprjct/Scripts/python.exe \"C:\\\\Users\\\\tpmso\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Aerothon-Hybrid-Uav-Optimizer\\\\a6f7139f-63fa-4ae9-9f34-a9db63113d24\\\\scratchpad\\\\probe3.py\")",
+      "Bash(./aeroprjct/Scripts/python.exe -m pyflakes src/*.py src/dashboard/app.py)",
+      "Bash(./aeroprjct/Scripts/python.exe -m flake8 --select=F,E9 src/)"
+    ]
+  }
+}
