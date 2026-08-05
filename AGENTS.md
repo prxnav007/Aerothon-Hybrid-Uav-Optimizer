@@ -46,19 +46,16 @@ aspect ratio and altitude design variables without touching a physics file. None
 | Area | State |
 |---|---|
 | `models/atmosphere.py`, `aerodynamics.py`, `mass.py`, `engine.py`, `battery.py`, `powertrain.py` | complete, with test modules |
-| `control/base.py`, `tests/test_control_base.py` | complete; shared controller interface and reusable contract suite |
-| `tests/test_controllers.py`, `tests/test_mission.py` | **empty files** |
-| Remaining `control/`, plus `simulation/`, `optimization/`, `analysis/`, `dashboard/`, `src/config.py` | **empty files** — directory skeleton only |
+| `control/base.py`, `control/power_split.py`, `control/fixed_ecms.py`, `simulation/mission.py`, `simulation/simulator.py`, and their test modules | complete; controller contract and fixed control group, ECMS split, mission profile and time-marching integration |
+| `analysis/constraint_diagram.py` | complete, with formulation, hybrid, sizing, sensitivity and plotting tests |
+| `tests/test_controllers.py` | **empty file** |
+| `control/pi_ecms.py`, `control/fuzzy_ecms.py`, `simulation/feasibility.py`, `optimization/`, remaining `analysis/`, `dashboard/`, `src/config.py` | **empty files** — directory skeleton only |
 | `configs/*.yaml`, `run.sh`, `README.md` | **empty files** |
 | `notebooks/*.ipynb` | placeholder JSON |
 
-Caveat on "passes tests": pytest is **not installed** in the project venv (`aeroprjct/`, Python
-3.13), and the committed `.pyc` artifacts show the suite was last run under a Python 3.14
-environment that is not on this machine. What was verified directly here is that all six model
-modules import cleanly and reproduce the figures quoted in `docs/assumptions.md` — wing mass 119.58
-vs 118.72 kg for the two independent laws (M-03/M-03b), chain efficiency 0.80636 and 37.204 kW of
-engine shaft power for 30 kW of demand (P-01), 86.79 A at the battery reference condition (B-03),
-45.71 kW lapsed rating at 6 km (E-04). Install pytest before claiming the suite is green.
+Verification: the workspace's `env/` Python 3.14 environment contains pytest and the pinned pandas
+and Matplotlib dependencies. On 2026-08-05, `PYTHONDONTWRITEBYTECODE=1 env/bin/pytest -q`
+completed with **744 passed** in 22.32 s.
 
 ## 4. Non-negotiable conventions
 

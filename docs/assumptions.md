@@ -613,6 +613,39 @@ explicitly because the battery model makes it operating-point dependent; 1.0 pre
 engine-versus-bus comparison until the controller integration supplies that operating point.
 **Bias:** The default under-prices discharged battery energy relative to a lossy replacement cycle.
 
+### C-03 — Marginal ECMS switching equivalence factor
+**Value:** s_switch = a·LHV/(3600·η_source), where `a` is the Willans marginal slope. For the
+default calibration, a = 0.36 kg/kWh and η_source = 0.9025, giving s_switch = 4.776. `VERIFIED`
+(algebraic form under constant source efficiency and negligible battery resistance)
+**Rationale:** Differentiating the Hamiltonian with respect to engine shaft power removes the
+Willans intercept `b`, because that parasitic fuel flow is already sunk while the engine is on.
+The resulting modulation threshold therefore uses marginal fuel consumption, not average SFC.
+This differs from `base.py`'s neutral factor: using the default rated SFC of 0.45 kg/kWh gives
+s_neutral = 5.970. The neutral factor prices an average bus kWh at a stated operating point;
+s_switch determines whether another engine kW lowers the Hamiltonian. Neither is the separate
+engine on/off threshold, where the intercept and restart policy matter.
+**Exact-model qualification:** Rint loss is quadratic in current, not bus power. Its exact
+open-circuit power contains the battery model's square root and makes the on-state Hamiltonian
+convex, allowing an interior minimum. Load-dependent source efficiency under O-11 also replaces
+the affine source relation, so the closed form is a reference threshold rather than the exact
+switching surface in either case.
+
+### C-04 — Power-split numerical tolerances
+**Value:** Production power tolerance 0.01 kW; one-sided derivative probe 0.001 kW at the default;
+fine-grid oracle resolution 0.05 kW; internal bound-comparison epsilon 1×10⁻¹⁰ kW. `VERIFIED`
+**Rationale:** Ten watts is already far below meaningful engine control and component-model
+resolution. The continuous engine-on Hamiltonian is tested at its endpoints first; golden-section
+search runs only when the finite-difference derivative changes sign. In a fixed-seed 1000-case
+benchmark this reduced the mean from 30.6 to 3.842 Hamiltonian evaluations and made the production
+solver 4.81× faster than the former 2 kW grid (median of five paired timings). A 75 kW interval
+needs about 19 golden contractions at 0.01 kW, versus roughly 29 at the deleted 1×10⁻⁴ kW setting.
+**O-11 check:** With load-dependent source efficiency, all 500 fixed-seed cases agreed with the
+0.05 kW oracle on feasibility and engine power. Sampled adjacent slopes were non-decreasing over
+491 non-degenerate feasible intervals, so the implemented O-11 Hamiltonian remains convex. The
+literal 1×10⁻⁹ relative Hamiltonian-agreement requirement failed in 14 interior cases (worst
+8.68×10⁻⁹): the continuous solver was lower than the nearest 0.05 kW grid point, so this is oracle
+quantisation rather than a local-minimum failure.
+
 ### S-01 — Fill-to-MTOW fuel policy
 **Value:** Fuel loaded = MTOW − dry mass. `VERIFIED`
 **Rationale:** Makes the powertrain-versus-fuel trade explicit and direct. Every kilogram spent on
@@ -621,20 +654,118 @@ engine, battery, or structure is a kilogram of fuel not carried.
 ### S-02 — Loiter is the endurance phase
 **Value:** Loiter extended until fuel reserve or SoC cutoff is reached; total mission time is the
 endurance being maximized. `VERIFIED`
-**Rationale:** Directly implements the stated objective while guaranteeing descent and landing
-remain completable.
+**Rationale:** Directly implements the stated objective while retaining descent and landing after
+the resource-terminated phase. The profile guarantees that those phases are present; whether a
+particular aircraft can complete them on the reserve belongs to mission feasibility.
 
 ### S-03 — Integration scheme and timestep
-**Value:** Explicit Euler, Δt = 60 s. `UNVERIFIED`
-**Rationale:** First-order accuracy is adequate for quasi-steady phases. A shorter step during
-climb, or an adaptive step, is noted as future work.
-**Bias:** Unknown; a step-size convergence study should be run to quantify it.
+**Value:** Explicit Euler, Δt = 60 s by default; per-phase override supported. `VERIFIED` for the
+reference mission convergence study.
+**Rationale:** Reference endurance was 10 808.007 s, 10 817.894 s, 10 822.985 s and 10 825.527 s
+at 120, 60, 30 and 15 s respectively. The 30-to-15 s change is 0.0235%, and the 60 s result is
+0.0705% below the 15 s result. This is comfortably below the modelling uncertainty elsewhere.
+Using 300 s only in loiter changed endurance by 0.0383% relative to uniform 60 s and ran 2.41×
+faster in the test benchmark, so the override is appropriate for large GA runs.
+**Bias:** The reference sequence converges upward as the step is shortened, so 60 s is slightly
+conservative for endurance in this case. This measured bound is configuration-specific, not a
+proof for every controller or design.
 
 ### S-04 — Reserves and limits
 **Value:** Landing fuel reserve 5 kg; minimum usable fuel for feasibility 20 kg; maximum mission
 time 24 h. `UNVERIFIED`
-**Rationale:** The reserve guarantees descent and landing can be completed. The 24 h cap is a
-safety bound on the simulation loop, not a physical limit.
+**Rationale:** The reserve is withheld for descent and landing; `feasibility.py` must determine
+whether it is sufficient for a particular aircraft and trajectory. The 24 h cap is a safety bound
+on the simulation loop, not a physical limit. The simulator prevents loiter from crossing the
+reserve, then permits descent and landing to consume it. Consequently the final fuel may be below
+the loiter-exit threshold; requiring both loiter-exit and post-landing fuel to exceed the same
+number would make the reserve unavailable for the phases it exists to cover.
+
+### S-05 — Default cruise altitude and vertical rates
+**Value:** Cruise altitude 3000 m; target climb rate +2.0 m/s; target descent rate −3.0 m/s.
+`OPEN` (altitude — see O-07), `UNVERIFIED` (rates)
+**Rationale:** 3000 m is the lower edge of the mandated 3–10 km cruise band and is the reproducible
+factory default while altitude remains open. It replaces the previous 6000 m default, where the
+power lapse of a 60 kW-class turboshaft is already material. The rates are mission targets rather
+than guaranteed performance: climb duration is derived from the achieved rate, and the simulator
+must limit the target against available excess power and report any shortfall. The public factory
+takes descent rate as a positive downward magnitude; the phase stores −3.0 m/s under the
+positive-up sign convention.
+**Bias:** Unknown. Altitude trades lower-density aerodynamic effects against engine power lapse, so
+the direction cannot be assigned without the O-07 sweep.
+
+### S-06 — Default fixed phase targets
+**Value:**
+
+| Phase | Fixed airspeed | Fixed duration | Altitude behaviour |
+|---|---:|---:|---|
+| Take-off | 50 m/s | 120 s | Hold ground reference |
+| Climb | 65 m/s | — | Climb to cruise altitude |
+| Cruise | 69.44 m/s | 3600 s | Hold cruise altitude |
+| Loiter | solved by minimum power | open-ended | Hold cruise altitude |
+| Descent | 65 m/s | — | Descend to zero altitude |
+| Landing | 45 m/s | 120 s | Hold zero altitude |
+
+`MANDATED` (cruise speed and phase order), `UNVERIFIED` (remaining fixed targets)
+**Rationale:** Cruise speed is the problem-statement value of 250 km/h. The other fixed speeds and
+durations are conceptual mission inputs retained as explicit factory arguments, not aircraft
+performance claims. Climb and descent terminate on altitude rather than time. Loiter defaults to
+the solved minimum-power condition but retains fixed-speed and best-L/D modes for O-06.
+
+### S-07 — Pre-dispatch neutral-factor operating point
+**Value:** Engine-only, demand-following shaft power, clamped to the current lapsed engine range;
+source-chain efficiency is evaluated at that same power. `UNVERIFIED` (control-policy choice)
+**Rationale:** The actual engine SFC is an outcome of the ECMS split. It therefore cannot be used to
+compute `neutral_s` before the controller and split solver run without a fixed-point iteration or a
+previous-step state. The engine-only operating point is deterministic on the first step, remains
+load-dependent under O-11, and introduces no controller history into the simulator. The actual SFC
+is still logged after the split.
+**Bias:** A controller that scales directly from `neutral_s` sees an engine-only reference rather
+than the eventual hybrid operating point. This seam should be included in controller sensitivity
+testing; iterating the controller and split is a distinct policy, not a neutral implementation
+detail.
+
+### CD-01 — Maximum stall speed for constraint sizing
+**Value:** V_stall,max = V_landing / 1.2 = 45 / 1.2 = 37.5 m/s at sea level. `UNVERIFIED`
+**Rationale:** The problem statement does not supply a stall speed. The constraint diagram derives
+one from the mission profile's 45 m/s landing speed and the standard 1.2 speed margin already used
+by the aerodynamic model. With C_Lmax = 1.5 this limits W/S to 1292.0 N/m². Landing speed remains
+an assumed mission input, so the derived limit is not promoted beyond it.
+**Bias:** Unknown. A lower certified landing margin or high-lift landing configuration would permit
+greater wing loading; handling-quality or field constraints could demand less.
+
+### CD-02 — Service-ceiling residual climb rate
+**Value:** ROC = +0.5 m/s at 10 000 m. `UNVERIFIED`
+**Rationale:** The maximum operating altitude is checked with a small positive residual climb rate,
+rather than defining ceiling at exactly zero excess power. The 0.5 m/s convention is a sizing input,
+not a problem-statement requirement.
+**Bias:** Conservative relative to a zero-rate absolute ceiling; optimistic if operational climb
+performance at 10 km must exceed 0.5 m/s.
+
+### CD-03 — No take-off-distance constraint
+**Value:** Omitted because no runway length, obstacle height, or ground-roll target is specified.
+`UNVERIFIED`
+**Rationale:** A take-off-distance curve cannot be derived from take-off speed alone. The transient
+climb curve still sizes airborne peak power, but it is not a substitute for field performance.
+**Bias:** Optimistic. A later runway requirement can only shrink the feasible region.
+
+### CD-04 — Constraint-diagram selection margin and reference case
+**Value:** 10% installed-power margin; reference transient boost = 30 kW at the DC bus. `UNVERIFIED`
+**Rationale:** The margin is applied after taking the envelope of all sampled power constraints.
+The reference boost is the 10 kWh pack's 3C discharge rating from B-04; it bypasses generator and
+rectifier losses but still supplies the motor-side demand chain. The report design case combines
+cruise at the 3000 m default, +2 m/s transient climb at 3000 m, and a +0.5 m/s service-ceiling check
+at 10 000 m. These point constraints do not prove that the battery can sustain the boost or that
+the mass and fuel-volume budgets close.
+**Bias:** The power margin is conservative; treating the full 3C pack rating as continuously
+available throughout climb is optimistic until mission energy is checked.
+
+### CD-05 — Measured altitude trend of the reference cruise constraint
+**Value:** Installed rating at W/S = 980.665 N/m² is 92.211, 92.206, 92.551, 93.337, 94.678,
+96.725, 99.674, 103.781, 109.384, 116.936 and 127.042 kW at 0–10 km in 1 km steps. `VERIFIED`
+**Rationale:** The shallow minimum is at 1 km, but the curve is not approximately flat over the
+whole altitude band: its 10 km value is 37.8% above its minimum. Density reduction initially trims
+parasite power, after which induced power and the turboshaft lapse dominate. This corrects the
+constraint-diagram specification's unsupported “roughly flat across 0–10 km” claim.
 
 ---
 
@@ -655,6 +786,15 @@ These must be resolved and this document updated before final submission.
 | O-09 | Design limit load factor | 3.8 (FAR 23 normal category, manned) vs 2.5–3.0 (typical MALE-class UAV) | M-03, wing mass |
 | O-10 | Usable tank volume fraction | 0.5 (current) vs 0.30–0.35 (inter-spar box) | M-06, whether the volume check binds |
 | O-11 | Load-dependent component efficiency | Constant stage efficiencies (current default) vs a no-load-plus-load-squared loss model (both implemented behind `load_dependent`) | P-01, P-02, loiter power demand |
+
+**O-06.** The mission profile now represents speed as a mode. `MIN_POWER` is the current loiter
+default, `FIXED` accepts an explicit airspeed, and `BEST_LD` is available for range-oriented
+comparisons. This structural support does not resolve which loiter policy should be used in the
+final design; the simulator must resolve solved modes from the current aircraft state each step.
+
+**O-07.** `ps1_mission(cruise_altitude_m=...)` propagates its argument through climb, cruise and
+loiter, so fixed-altitude studies and a GA-supplied altitude use the same profile structure. The
+3000 m factory default in S-05 is a baseline value, not a resolution of the open decision.
 
 **O-11.** The vehicle loiters at roughly a third of the inverter and motor ratings, which is where a
 constant-efficiency assumption is least accurate, and four stages compound. Under the loss model
@@ -706,3 +846,7 @@ actual editions before citation in the technical report.
 | 2026-08-05 | **`battery.py` revision — energy-limited discharge.** B-06: rewritten and retitled. Available power is now the power sustainable for the whole step, not the instantaneous capability, closing a path by which a step starting above the cutoff integrated through it and delivered energy the pack did not hold — 0.25 kWh against 0.0435 kWh available in the worked 5 kWh case, and the resulting SoC of 0.0019 sat below the hard floor with no flag, because the clamp is to [0, 1] and never fired. Availability model promoted to `VERIFIED` in form. Recorded: the energy ceiling must be capped at the ohmic ceiling before the quadratic is evaluated, or it returns large negative powers at short timesteps; start-of-step OCV retained over a midpoint evaluation, with the R_eff closed form for the midpoint case and the resulting optimistic bias tabulated (0.71% worst case per step, 1.2×10⁻³ over a full discharge at Δt = 60 s, first order in Δt); the SoC clamp is no longer reachable and a 1×10⁻⁹ boundary tolerance added so `at_cutoff` is not decided on rounding; the Δt coupling of availability accepted and justified. `power_limited` split into `rate_limited` and `energy_limited` with the old name kept as their disjunction. B-04 deliberately **not** changed: the C-rate limit remains a bus-power cap of C·E_kWh, not a current cap of C·Q_nom, which would have silently restated the 10 kWh pack's 30 kW limit as 29.63 kW. |
 | 2026-08-04 | **`battery.py` build.** B-03: internal resistance scaling model recorded as R(E) = 0.05 · (10 / E_kWh), implemented behind `scale_resistance` with the scaled form as default pending O-05; the quadratic current solution and the Q_nom = E/V_nominal consistency promoted to `VERIFIED` in form; the naive P/V_oc error quantified at 1.26% in current and 0.377 kW in unbilled loss at the reference condition; ohmic power ceiling V_oc²/(4R) recorded as an enforced guard. B-04: retitled to cover both rate limits, charge C-rate of 1C recorded, and the previous engine-rated power limit identified as an implied 15C on a 5 kWh pack. B-06: clamp-and-flag behaviour recorded, and the 20% floor documented as reported-not-enforced. |
 | 2026-08-05 | **`control/base.py` build.** Added C-01 absolute equivalence-factor sanity rails at 0.5 and 20.0, applied by the concrete base-class entry point rather than by individual controllers. Added C-02 with the neutral-factor round-trip correction divided by η_rt and recorded 1.0 as the uncorrected default. The neutral factor remains operating-point dependent because SFC arrives from the Willans engine model. |
+| 2026-08-05 | **`simulation/mission.py` build.** Replaced fixed-duration climb and descent with altitude termination and signed target rates; changed loiter from a fixed 70 m/s to a selectable speed mode with minimum power as the default; made every mission input a factory argument; and added immutable phase/profile validation. Recorded the 3000 m cruise-altitude default and the remaining fixed phase targets in S-05/S-06 without resolving O-06 or O-07. |
+| 2026-08-05 | **`control/power_split.py` build.** Added feasible-bound intersection, separate off/idle candidates, golden-section ECMS minimisation, explicit infeasible decisions, active-bound diagnostics, and a fine-grid test oracle. C-03 distinguishes the Willans marginal switching factor (4.776) from the average-SFC neutral factor (5.970). Corrected the specification's description of Rint loss: it is quadratic in current, only approximately quadratic in bus power, while the exact Hamiltonian remains convex. The solver uses the powertrain forward/inverse APIs so O-11's load-dependent source chain remains reachable. |
+| 2026-08-05 | **Power-split fast path and `simulation/simulator.py` integration.** C-04 updated from a 1×10⁻⁴ to 0.01 kW production tolerance and finite-difference endpoint screening; measured 3.842 Hamiltonian evaluations per solve and 4.81× speedup over the 2 kW grid. The 500-case O-11 sweep found a convex continuous Hamiltonian and power agreement within the 0.05 kW oracle resolution; documented the oracle's 14 quantisation-level failures of the over-tight 1×10⁻⁹ relative Hamiltonian criterion. Added the one-step whole-stack integration contract and the deterministic six-phase simulator with injected controllers/split solvers, partial altitude steps, resource-boundary shortening, diagnostics, optional logging and dataframe export. S-03 promoted from `UNVERIFIED` with the 120/60/30/15 s convergence series; S-04 clarified that the loiter-exit reserve is subsequently available to descent and landing; S-07 records the non-circular neutral-factor operating point. |
+| 2026-08-05 | **`analysis/constraint_diagram.py` build.** Added vectorized sustained and battery-boosted cruise/climb/ceiling power constraints, stall boundary, margin-adjusted design selection, fixed-MTOW fuel contours, and the report figure. CD-01 records the landing-derived 37.5 m/s maximum stall speed; CD-02 the 0.5 m/s service-ceiling rate; CD-03 the deliberate omission of an undefined take-off-distance constraint; and CD-04 the 10% sizing margin and DC-bus boost convention. CD-05 corrects the specification's “roughly flat” altitude claim with the measured 0–10 km cruise-rating series. Matplotlib was advanced from 3.10.0 to 3.10.7 because 3.10.0 recursively fails while drawing even a basic plot on the repository's Python 3.14 runtime. |
