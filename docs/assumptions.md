@@ -593,7 +593,25 @@ guarded, returning zero rather than raising.
 
 ---
 
-## 8. Mission and simulation — `simulation/`
+## 8. Control, mission and simulation — `control/`, `simulation/`
+
+### C-01 — Absolute equivalence-factor sanity bounds
+**Value:** 0.5 ≤ s ≤ 20.0. `UNVERIFIED`
+**Rationale:** These are last-resort rails against a mutated controller gene or a failed inference,
+not tuning bounds and not a claim about the useful controller range. The simulator calls the
+clamped base-class method, so no strategy can send an extreme equivalence factor into the ECMS
+Hamiltonian. A controller that reaches either rail during an ordinary mission should be treated as
+misconfigured even though the value remains numerically safe.
+
+### C-02 — Round-trip correction to the neutral equivalence factor
+**Value:** `round_trip_efficiency = 1.0` by default, so the correction is disabled. `VERIFIED`
+(correction form), `UNVERIFIED` (default)
+**Rationale:** Equating engine fuel per DC-bus kWh with the Hamiltonian's equivalent battery fuel
+defines the neutral factor. If discharged battery energy must later be replenished through a cycle
+with efficiency η_rt, the break-even factor is divided by η_rt. The function accepts the efficiency
+explicitly because the battery model makes it operating-point dependent; 1.0 preserves the direct
+engine-versus-bus comparison until the controller integration supplies that operating point.
+**Bias:** The default under-prices discharged battery energy relative to a lossy replacement cycle.
 
 ### S-01 — Fill-to-MTOW fuel policy
 **Value:** Fuel loaded = MTOW − dry mass. `VERIFIED`
@@ -687,3 +705,4 @@ actual editions before citation in the technical report.
 | 2026-08-05 | **`powertrain.py` build, and `battery.py` limiting moved into current space.** P-01: cabling added as a fifth stage, the compounded chain recorded as 0.8064 engine shaft to propeller shaft, and the previous implementation's omission quantified — 31.58 kW of engine shaft power called for against 37.20 kW required at 30 kW of shaft demand, understating fuel burn by 15.1%. P-04 opened for DC distribution at 0.99, previously neglected entirely. P-05 opened to fix the system efficiency metric, with battery charging excluded from the denominator. O-11 opened for load-dependent stage efficiency; recorded that the model peaks at 65.5% of rating rather than rising monotonically to it, and that the demand chain falls 1.15% at the loiter condition while the compounded chain falls 0.86%. B-06: limiting moved from power space into current space and the SoC clamp removed outright rather than retained as a guard — an energy-limited step now lands on its boundary exactly, and the reported bus power is the quadratic at the integrated current rather than the command. `available_discharge_kw` and `available_charge_kw` take `dt_s` as optional rather than required, restoring the rate-limit-only query; recorded that the controller must pass it or its own bus balance will not close. |
 | 2026-08-05 | **`battery.py` revision — energy-limited discharge.** B-06: rewritten and retitled. Available power is now the power sustainable for the whole step, not the instantaneous capability, closing a path by which a step starting above the cutoff integrated through it and delivered energy the pack did not hold — 0.25 kWh against 0.0435 kWh available in the worked 5 kWh case, and the resulting SoC of 0.0019 sat below the hard floor with no flag, because the clamp is to [0, 1] and never fired. Availability model promoted to `VERIFIED` in form. Recorded: the energy ceiling must be capped at the ohmic ceiling before the quadratic is evaluated, or it returns large negative powers at short timesteps; start-of-step OCV retained over a midpoint evaluation, with the R_eff closed form for the midpoint case and the resulting optimistic bias tabulated (0.71% worst case per step, 1.2×10⁻³ over a full discharge at Δt = 60 s, first order in Δt); the SoC clamp is no longer reachable and a 1×10⁻⁹ boundary tolerance added so `at_cutoff` is not decided on rounding; the Δt coupling of availability accepted and justified. `power_limited` split into `rate_limited` and `energy_limited` with the old name kept as their disjunction. B-04 deliberately **not** changed: the C-rate limit remains a bus-power cap of C·E_kWh, not a current cap of C·Q_nom, which would have silently restated the 10 kWh pack's 30 kW limit as 29.63 kW. |
 | 2026-08-04 | **`battery.py` build.** B-03: internal resistance scaling model recorded as R(E) = 0.05 · (10 / E_kWh), implemented behind `scale_resistance` with the scaled form as default pending O-05; the quadratic current solution and the Q_nom = E/V_nominal consistency promoted to `VERIFIED` in form; the naive P/V_oc error quantified at 1.26% in current and 0.377 kW in unbilled loss at the reference condition; ohmic power ceiling V_oc²/(4R) recorded as an enforced guard. B-04: retitled to cover both rate limits, charge C-rate of 1C recorded, and the previous engine-rated power limit identified as an implied 15C on a 5 kWh pack. B-06: clamp-and-flag behaviour recorded, and the 20% floor documented as reported-not-enforced. |
+| 2026-08-05 | **`control/base.py` build.** Added C-01 absolute equivalence-factor sanity rails at 0.5 and 20.0, applied by the concrete base-class entry point rather than by individual controllers. Added C-02 with the neutral-factor round-trip correction divided by η_rt and recorded 1.0 as the uncorrected default. The neutral factor remains operating-point dependent because SFC arrives from the Willans engine model. |

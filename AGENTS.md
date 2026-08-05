@@ -46,8 +46,9 @@ aspect ratio and altitude design variables without touching a physics file. None
 | Area | State |
 |---|---|
 | `models/atmosphere.py`, `aerodynamics.py`, `mass.py`, `engine.py`, `battery.py`, `powertrain.py` | complete, with test modules |
+| `control/base.py`, `tests/test_control_base.py` | complete; shared controller interface and reusable contract suite |
 | `tests/test_controllers.py`, `tests/test_mission.py` | **empty files** |
-| `control/`, `simulation/`, `optimization/`, `analysis/`, `dashboard/`, `src/config.py` | **empty files** — directory skeleton only |
+| Remaining `control/`, plus `simulation/`, `optimization/`, `analysis/`, `dashboard/`, `src/config.py` | **empty files** — directory skeleton only |
 | `configs/*.yaml`, `run.sh`, `README.md` | **empty files** |
 | `notebooks/*.ipynb` | placeholder JSON |
 
