@@ -1,23 +1,27 @@
 """Tests for :mod:`src.models.battery` (Rint pack on the DC bus).
 
-Verification is in six tiers: energy closure between the rated capacity and the
-coulomb count, the quadratic current solution that replaces P/V_oc, resistance
-scaling with pack size, the C-rate and state-of-charge limits, the sign
-convention, and vectorization. A final test pins the power limit to capacity
-rather than to engine rating, which is what the previous model got wrong.
+Verification is in seven tiers: energy closure between the rated capacity and
+the coulomb count, the quadratic current solution that replaces P/V_oc,
+resistance scaling with pack size, the C-rate and state-of-charge limits, the
+energy-limited availability that stops a step discharging past the cutoff, the
+sign convention, and vectorization. A final test pins the power limit to
+capacity rather than to engine rating, which is what the previous model got
+wrong.
 """
 
 import dataclasses
+import math
 
 import numpy as np
 import pytest
 
-from src.models.battery import BatteryPack
+from src.models.battery import SOC_EPS, BatteryPack
 
 CAPACITY_KWH = 10.0
 SOC_MID = 0.5
 BUS_KW = 30.0
 DT_S = 60.0
+SHORT_DT_S = 1.0
 
 PREVIOUS_MODEL_ENGINE_KW = 75.0
 SMALL_PACK_KWH = 5.0
@@ -41,6 +45,32 @@ def _charge_sweep(pack: BatteryPack, n: int = 25) -> np.ndarray:
     return -np.linspace(0.1, pack.max_charge_kw, n)
 
 
+def _discharge_to_cutoff(
+    pack: BatteryPack,
+    commanded_kw: float,
+    dt_s: float,
+    soc_0: float = 1.0,
+    max_steps: int = 500_000,
+) -> tuple[float, float, float]:
+    """Discharge to the cutoff; returns (bus kWh, ohmic kWh, final soc)."""
+    soc, bus_kwh, loss_kwh = soc_0, 0.0, 0.0
+    for _ in range(max_steps):
+        state = pack.step(soc, commanded_kw, dt_s)
+        bus_kwh += state.power_kw * dt_s / 3600.0
+        loss_kwh += state.ohmic_loss_kw * dt_s / 3600.0
+        soc = state.soc
+        if state.at_cutoff:
+            return bus_kwh, loss_kwh, soc
+    raise AssertionError("discharge never reached the cutoff")
+
+
+def _open_circuit_energy_kwh(pack: BatteryPack, soc_from: float, soc_to: float) -> float:
+    """Chemistry-side energy over a state-of-charge span, exact for linear OCV."""
+    charge_ah = (soc_from - soc_to) * pack.charge_capacity_ah
+    mean_v = float(pack.open_circuit_voltage(0.5 * (soc_from + soc_to)))
+    return charge_ah * mean_v / 1000.0
+
+
 # ---------------------------------------------------------------------------
 # Energy closure
 # ---------------------------------------------------------------------------
@@ -59,14 +89,9 @@ def test_nominal_voltage_is_the_midpoint_of_the_linear_ocv(pack):
 def test_full_discharge_at_negligible_power_delivers_the_rated_energy():
     """Validates the Ah derivation against the linear OCV model."""
     pack = BatteryPack(CAPACITY_KWH, soc_min=0.0)
-    trickle_kw = 0.5
+    delivered_kwh, _, final_soc = _discharge_to_cutoff(pack, 0.5, DT_S)
 
-    soc, delivered_kwh = 1.0, 0.0
-    while soc > 0.0:
-        state = pack.step(soc, trickle_kw, DT_S)
-        delivered_kwh += state.power_kw * DT_S / 3600.0
-        soc = state.soc
-
+    assert final_soc == pytest.approx(0.0, abs=SOC_EPS)
     assert delivered_kwh == pytest.approx(CAPACITY_KWH, rel=5e-3)
 
 
@@ -137,13 +162,17 @@ def test_ohmic_loss_rises_with_falling_state_of_charge(pack):
 
 
 def test_power_above_the_ohmic_ceiling_is_clamped_and_never_nan():
-    """The C-rate limit normally binds first, so the guard needs an absurd C-rate."""
+    """The C-rate limit normally binds first, so the guard needs an absurd C-rate.
+
+    A short step keeps the coulomb budget out of the way, so the ohmic ceiling
+    is what binds; over 60 s the energy limit would bind first, at 519 kW.
+    """
     pack = BatteryPack(CAPACITY_KWH, discharge_c_rate=200.0)
     ceiling_kw = float(pack.ohmic_power_ceiling_kw(1.0))
     assert ceiling_kw == pytest.approx(800.0)
 
-    state = pack.step(1.0, 2.0 * ceiling_kw, DT_S)
-    assert state.power_limited
+    state = pack.step(1.0, 2.0 * ceiling_kw, SHORT_DT_S)
+    assert state.rate_limited and not state.energy_limited
     assert state.power_kw == pytest.approx(ceiling_kw)
     assert np.isfinite(state.current_a)
     # Maximum power transfer sits at half the open-circuit voltage.
@@ -194,17 +223,26 @@ def test_power_limits_are_the_c_rate_times_capacity(pack):
 
 
 @pytest.mark.parametrize("soc", [0.0, 0.01, 0.05])
-def test_no_discharge_at_or_below_the_hard_cutoff(pack, soc):
-    assert pack.available_discharge_kw(soc) == 0.0
+@pytest.mark.parametrize("dt_s", [0.01, 1.0, 60.0, 3600.0])
+def test_no_discharge_at_or_below_the_hard_cutoff(pack, soc, dt_s):
+    assert pack.available_discharge_kw(soc, dt_s) == 0.0
 
 
 def test_discharge_is_available_above_the_cutoff(pack):
-    assert pack.available_discharge_kw(0.06) == pytest.approx(pack.max_discharge_kw)
+    """Just above the cutoff only a short step clears the C-rate limit."""
+    assert pack.available_discharge_kw(0.06, SHORT_DT_S) == pytest.approx(pack.max_discharge_kw)
 
 
-def test_no_charge_at_full_state_of_charge(pack):
-    assert pack.available_charge_kw(1.0) == 0.0
-    assert pack.available_charge_kw(0.99) == pytest.approx(pack.max_charge_kw)
+@pytest.mark.parametrize("dt_s", [0.01, 1.0, 60.0, 3600.0])
+def test_no_charge_at_full_state_of_charge(pack, dt_s):
+    assert pack.available_charge_kw(1.0, dt_s) == 0.0
+
+
+def test_availability_rejects_a_non_positive_timestep(pack):
+    for call in (pack.available_discharge_kw, pack.available_charge_kw):
+        for dt in (0.0, -60.0):
+            with pytest.raises(ValueError, match="dt_s"):
+                call(SOC_MID, dt)
 
 
 def test_command_above_the_discharge_limit_is_clamped_and_flagged(pack):
@@ -227,8 +265,10 @@ def test_command_within_the_envelope_is_delivered_untouched(pack):
 
 
 def test_discharge_below_the_cutoff_is_locked_out(pack):
+    """At the floor there is no charge left to spend, so the cause is energy."""
     state = pack.step(pack.soc_min, BUS_KW, DT_S)
     assert state.at_cutoff and state.power_limited
+    assert state.energy_limited and not state.rate_limited
     assert state.power_kw == 0.0
     assert state.soc == pytest.approx(pack.soc_min)
 
@@ -246,16 +286,333 @@ def test_below_safe_floor_marks_the_recommended_operating_band(pack):
     assert not pack.step(SOC_MID, 0.1, DT_S).below_safe_floor
 
 
-def test_a_state_of_charge_clamp_is_flagged_not_absorbed():
-    """A step long enough to run the pack flat must not report an honest result."""
+def test_a_step_long_enough_to_run_the_pack_flat_is_limited_not_clamped():
+    """Formerly this integrated past the floor and clamped afterwards."""
     pack = BatteryPack(CAPACITY_KWH, soc_min=0.0)
     state = pack.step(0.02, pack.max_discharge_kw, 3600.0)
-    assert state.soc == 0.0
-    assert state.power_limited and state.at_cutoff
+    assert state.soc == pytest.approx(0.0, abs=SOC_EPS)
+    assert state.energy_limited and state.at_cutoff
+    assert state.power_kw < pack.max_discharge_kw
 
 
 def test_state_of_charge_never_leaves_the_unit_interval(pack):
-    assert pack.step(0.999, -pack.max_charge_kw, 3600.0).soc == 1.0
+    assert pack.step(0.999, -pack.max_charge_kw, 3600.0).soc == pytest.approx(1.0, abs=SOC_EPS)
+
+
+# ---------------------------------------------------------------------------
+# Energy-limited availability
+#
+# The pack may not deliver, within one step, charge it does not hold above the
+# cutoff. Availability is therefore the lesser of a rate ceiling (C-rate and
+# ohmic, independent of the step) and an energy ceiling (the charge above the
+# cutoff spread over the step). See B-06.
+# ---------------------------------------------------------------------------
+
+
+def test_a_discharge_starting_above_the_floor_cannot_integrate_past_it():
+    """The motivating case: 5 kWh at soc = 0.06, 15 kW commanded for 60 s.
+
+    Unlimited, this moved 0.25 kWh - roughly six times the 0.0435 kWh the pack
+    holds above the floor - and landed soc at 0.0019, below the hard cutoff,
+    with no flag raised at all.
+    """
+    pack = BatteryPack(SMALL_PACK_KWH)
+    state = pack.step(0.06, pack.max_discharge_kw, DT_S)
+
+    available_kwh = _open_circuit_energy_kwh(pack, 0.06, pack.soc_min)
+    delivered_kwh = state.power_kw * DT_S / 3600.0
+    naive_kwh = pack.max_discharge_kw * DT_S / 3600.0
+
+    assert naive_kwh == pytest.approx(0.25)
+    assert available_kwh == pytest.approx(0.043643, abs=1e-6)
+    # Within the start-of-step OCV bias only - see W1 in B-06, +0.16% here.
+    assert delivered_kwh <= available_kwh * 1.002
+    assert delivered_kwh == pytest.approx(0.043592, abs=1e-6)
+
+    # V_oc(0.06)*I - I**2*R at the 8.5714 A the charge above the floor allows.
+    assert state.current_a == pytest.approx(8.5714, abs=1e-4)
+    assert state.power_kw == pytest.approx(2.6155, abs=1e-4)
+
+    assert state.soc == pytest.approx(pack.soc_min, abs=SOC_EPS)
+    assert state.energy_limited and not state.rate_limited
+
+
+def test_a_full_discharge_conserves_open_circuit_energy():
+    """Bus energy plus ohmic loss must equal the chemistry-side energy spent.
+
+    Closes to 1.2e-4 relative at a 6 s step, which is the W1 start-of-step OCV
+    bias and nothing else - see the convergence test below. At the S-03
+    production step of 60 s the same figure is 1.2e-3.
+    """
+    pack = BatteryPack(CAPACITY_KWH)
+    bus_kwh, loss_kwh, final_soc = _discharge_to_cutoff(pack, 5.0, dt_s=6.0)
+
+    assert final_soc == pytest.approx(pack.soc_min, abs=SOC_EPS)
+    expected_kwh = _open_circuit_energy_kwh(pack, 1.0, final_soc)
+    assert bus_kwh + loss_kwh == pytest.approx(expected_kwh, rel=1.2e-4)
+    assert bus_kwh + loss_kwh > expected_kwh  # the bias is optimistic
+
+
+def test_the_energy_conservation_error_is_first_order_in_the_timestep():
+    """Confirms the residual is the W1 start-of-step OCV bias and nothing else.
+
+    Evaluating OCV at the start of a step makes the sum a left Riemann sum of
+    the integral of V_oc dq, whose error is proportional to the charge moved per
+    step. Halving the step must halve the error.
+    """
+    pack = BatteryPack(CAPACITY_KWH)
+
+    errors = []
+    for dt_s in (60.0, 30.0, 15.0):
+        bus_kwh, loss_kwh, final_soc = _discharge_to_cutoff(pack, 5.0, dt_s)
+        expected_kwh = _open_circuit_energy_kwh(pack, 1.0, final_soc)
+        errors.append((bus_kwh + loss_kwh - expected_kwh) / expected_kwh)
+
+    # Positive: start-of-step OCV overstates the mean, so the model is optimistic.
+    assert all(error > 0.0 for error in errors)
+    assert errors[0] == pytest.approx(2.0 * errors[1], rel=1e-2)
+    assert errors[1] == pytest.approx(2.0 * errors[2], rel=1e-2)
+
+
+def test_availability_falls_with_the_step_length_and_never_beats_the_rate_limit(pack):
+    """The proposal had this monotonicity the other way round.
+
+    A longer step must be sustained from the same charge, so availability falls
+    as the step grows, approaching the C-rate ceiling as the step shrinks.
+    """
+    steps = [0.01, 0.1, 1.0, 10.0, 60.0, 600.0, 3600.0]
+    available = [pack.available_discharge_kw(0.5, dt_s) for dt_s in steps]
+
+    assert all(later <= earlier for earlier, later in zip(available, available[1:]))
+    assert all(value <= pack.max_discharge_kw for value in available)
+    assert available[0] == pytest.approx(pack.max_discharge_kw)
+    assert available[-1] < pack.max_discharge_kw
+
+
+def test_charge_availability_falls_with_the_step_length(pack):
+    steps = [0.01, 1.0, 60.0, 600.0, 3600.0]
+    available = [pack.available_charge_kw(0.9, dt_s) for dt_s in steps]
+
+    assert all(later <= earlier for earlier, later in zip(available, available[1:]))
+    assert all(value <= pack.max_charge_kw for value in available)
+    assert available[0] == pytest.approx(pack.max_charge_kw)
+    assert available[-1] < pack.max_charge_kw
+
+
+def test_a_short_step_at_high_state_of_charge_is_rate_limited(pack):
+    """Plenty of charge, no time to spend it: the C-rate binds."""
+    assert pack.available_discharge_kw(0.9, SHORT_DT_S) == pytest.approx(pack.max_discharge_kw)
+
+    state = pack.step(0.9, 2.0 * pack.max_discharge_kw, SHORT_DT_S)
+    assert state.rate_limited and not state.energy_limited
+    assert state.power_kw == pytest.approx(pack.max_discharge_kw)
+
+
+def test_a_long_step_at_low_state_of_charge_is_energy_limited(pack):
+    """Power the pack could deliver, for longer than the charge lasts."""
+    long_dt_s = 600.0
+    available_kw = pack.available_discharge_kw(0.1, long_dt_s)
+    assert 0.0 < available_kw < pack.max_discharge_kw
+
+    state = pack.step(0.1, 0.5 * pack.max_discharge_kw, long_dt_s)
+    assert state.energy_limited and not state.rate_limited
+    assert state.power_kw == pytest.approx(available_kw)
+    assert state.soc == pytest.approx(pack.soc_min, abs=SOC_EPS)
+
+
+def test_both_causes_are_reported_when_both_bind(pack):
+    """A command over the C-rate, on a step longer than the charge supports."""
+    state = pack.step(0.1, 2.0 * pack.max_discharge_kw, 600.0)
+    assert state.rate_limited and state.energy_limited
+
+
+def test_the_coulomb_budget_imposes_no_limit_when_it_exceeds_the_ohmic_ceiling():
+    """Regression: evaluating P = V*I - I**2*R past the ceiling returns nonsense.
+
+    At soc = 1.0 over 1 s the charge above the cutoff would support 97.7 kA,
+    far beyond the 4 kA of maximum power transfer. The quadratic is descending
+    there and reports -438 MW, which as an availability would force the pack to
+    charge at full power.
+    """
+    pack = BatteryPack(CAPACITY_KWH, discharge_c_rate=200.0)
+    coulomb_current_a = (1.0 - pack.soc_min) * pack.charge_capacity_ah * 3600.0 / SHORT_DT_S
+    assert coulomb_current_a > pack._max_power_current_a(1.0)
+
+    unguarded_kw = pack._bus_power_kw(coulomb_current_a, 1.0)
+    assert unguarded_kw < 0.0
+
+    assert pack._discharge_energy_ceiling_kw(1.0, SHORT_DT_S) == math.inf
+    assert pack.available_discharge_kw(1.0, SHORT_DT_S) == pytest.approx(
+        float(pack.ohmic_power_ceiling_kw(1.0))
+    )
+
+
+def test_charging_that_would_overshoot_full_lands_exactly_on_full(pack):
+    """The mirror of the discharge case, at the top of the range."""
+    available_kw = pack.available_charge_kw(0.99, DT_S)
+    assert 0.0 < available_kw < pack.max_charge_kw
+
+    state = pack.step(0.99, -pack.max_charge_kw, DT_S)
+    assert state.soc == pytest.approx(1.0, abs=SOC_EPS)
+    assert state.energy_limited and not state.rate_limited
+    assert state.power_kw == pytest.approx(-available_kw)
+
+
+def test_the_bus_pays_the_loss_on_top_of_the_stored_energy_when_charge_limited(pack):
+    """|P| = V_oc*|I| + I**2*R on charge - the sign carried through the quadratic."""
+    current_a = (1.0 - 0.99) * pack.charge_capacity_ah * 3600.0 / DT_S
+    v_oc = float(pack.open_circuit_voltage(0.99))
+    r = pack.internal_resistance_ohm
+    assert pack.available_charge_kw(0.99, DT_S) == pytest.approx(
+        (v_oc * current_a + current_a * current_a * r) / 1000.0
+    )
+
+
+def test_power_limited_is_the_disjunction_of_the_two_causes(pack):
+    assert not pack.step(SOC_MID, 20.0, DT_S).power_limited
+    assert pack.step(SOC_MID, 45.0, DT_S).power_limited  # rate only
+    assert pack.step(0.06, 5.0, 600.0).power_limited  # energy only
+
+
+def test_power_limited_still_means_exactly_that_the_command_was_cut(pack):
+    """The derived property must stay a faithful drop-in for the old boolean."""
+    rng = np.random.default_rng(7)
+    for _ in range(3000):
+        soc = float(rng.uniform(0.0, 1.0))
+        dt_s = float(10.0 ** rng.uniform(-1.0, 3.6))
+        power_kw = float(rng.uniform(-3.0 * pack.max_charge_kw, 3.0 * pack.max_discharge_kw))
+
+        state = pack.step(soc, power_kw, dt_s)
+        assert state.power_limited == (state.power_kw != state.commanded_kw)
+
+
+def test_no_command_respecting_availability_ever_needs_a_clamp(pack):
+    """Randomized sweep of state of charge, command and step length."""
+    rng = np.random.default_rng(20260805)
+    packs = [BatteryPack(c) for c in (2.0, 10.0, 50.0)]
+
+    for _ in range(4000):
+        subject = packs[rng.integers(len(packs))]
+        soc = float(rng.uniform(0.0, 1.0))
+        dt_s = float(10.0 ** rng.uniform(-1.0, 3.6))
+        ceiling_kw = subject.available_discharge_kw(soc, dt_s)
+        floor_kw = -subject.available_charge_kw(soc, dt_s)
+        power_kw = float(rng.uniform(floor_kw, ceiling_kw))
+
+        state = subject.step(soc, power_kw, dt_s)
+        assert state.power_kw == pytest.approx(power_kw, rel=1e-12, abs=1e-12)
+        assert not state.power_limited
+
+        # Direct observation that the clamp never acted: reproducing the
+        # coulomb count gives back the reported state of charge bit for bit.
+        integrated_soc = soc - state.current_a * dt_s / (subject.charge_capacity_ah * 3600.0)
+        assert state.soc == integrated_soc
+        assert 0.0 <= state.soc <= 1.0
+        # Charging from below the cutoff is allowed and stays below it - B-06.
+        assert state.soc >= min(soc, subject.soc_min) - SOC_EPS
+
+
+def test_no_phantom_energy_in_either_direction():
+    """What the bus receives is exactly what the pack moved, over a full sweep.
+
+    Two identities, over states of charge, commands and step lengths: the
+    coulomb count matches the integrated current, and the reported bus power is
+    the quadratic evaluated at that same current. Clamping SoC broke the first;
+    reporting the commanded power broke the second.
+    """
+    rng = np.random.default_rng(1104)
+    packs = [BatteryPack(c) for c in (2.0, 5.0, 10.0, 50.0)]
+
+    for _ in range(5000):
+        subject = packs[rng.integers(len(packs))]
+        soc = float(rng.uniform(0.0, 1.0))
+        dt_s = float(10.0 ** rng.uniform(-1.0, 3.6))
+        power_kw = float(
+            rng.uniform(-3.0 * subject.max_charge_kw, 3.0 * subject.max_discharge_kw)
+        )
+
+        state = subject.step(soc, power_kw, dt_s)
+
+        charge_moved_as = (soc - state.soc) * subject.charge_capacity_ah * 3600.0
+        assert charge_moved_as == pytest.approx(state.current_a * dt_s, rel=1e-9, abs=1e-9)
+
+        internal_kw = state.open_circuit_voltage_v * state.current_a / 1000.0
+        assert state.power_kw == pytest.approx(
+            internal_kw - state.ohmic_loss_kw, rel=1e-9, abs=1e-12
+        )
+        assert 0.0 <= state.soc <= 1.0
+
+
+def test_the_reported_power_is_the_achievable_one_not_the_commanded_one(pack):
+    """When a limit binds, `power_kw` is the quadratic at the limited current."""
+    for soc, power_kw, dt_s in ((0.06, 30.0, 600.0), (0.5, 45.0, 60.0), (0.99, -10.0, 60.0)):
+        state = pack.step(soc, power_kw, dt_s)
+        assert state.power_limited
+        assert state.power_kw != state.commanded_kw
+
+        r = pack.internal_resistance_ohm
+        assert state.power_kw == pytest.approx(
+            (state.open_circuit_voltage_v * state.current_a - state.current_a**2 * r) / 1000.0,
+            rel=1e-12,
+        )
+
+
+@pytest.mark.parametrize(
+    ("soc", "power_kw", "dt_s", "boundary"),
+    [
+        (0.06, 30.0, 60.0, "floor"),
+        (0.30, 30.0, 3600.0, "floor"),
+        (0.99, -10.0, 60.0, "full"),
+        (0.50, -10.0, 3600.0, "full"),
+    ],
+)
+def test_an_energy_limited_step_lands_on_the_boundary_never_past_it(
+    pack, soc, power_kw, dt_s, boundary
+):
+    state = pack.step(soc, power_kw, dt_s)
+    assert state.energy_limited
+    if boundary == "floor":
+        assert state.soc == pytest.approx(pack.soc_min, abs=1e-12)
+        assert state.soc >= pack.soc_min
+    else:
+        assert state.soc == pytest.approx(1.0, abs=1e-12)
+        assert state.soc <= 1.0
+
+
+def test_availability_without_a_timestep_is_the_rate_limit_alone(pack):
+    """The controller must pass `dt_s` to see the limit that actually binds."""
+    assert pack.available_discharge_kw(0.06) == pytest.approx(pack.max_discharge_kw)
+    assert pack.available_charge_kw(0.99) == pytest.approx(pack.max_charge_kw)
+
+    assert pack.available_discharge_kw(0.06, DT_S) < pack.max_discharge_kw
+    assert pack.available_charge_kw(0.99, DT_S) < pack.max_charge_kw
+
+
+@pytest.mark.parametrize("soc", [0.0, 0.03, 0.05])
+def test_availability_without_a_timestep_still_locks_out_the_cutoff(pack, soc):
+    assert pack.available_discharge_kw(soc) == 0.0
+
+
+def test_availability_with_a_timestep_never_exceeds_the_value_without_one(pack):
+    rng = np.random.default_rng(5)
+    for _ in range(500):
+        soc = float(rng.uniform(0.0, 1.0))
+        dt_s = float(10.0 ** rng.uniform(-1.0, 3.6))
+        assert pack.available_discharge_kw(soc, dt_s) <= pack.available_discharge_kw(soc)
+        assert pack.available_charge_kw(soc, dt_s) <= pack.available_charge_kw(soc)
+
+
+def test_a_command_exactly_at_availability_lands_exactly_on_the_bound(pack):
+    """The boundary case the randomized sweep only approaches."""
+    for soc, dt_s in ((0.06, DT_S), (0.3, 600.0), (0.99, 1.0)):
+        state = pack.step(soc, pack.available_discharge_kw(soc, dt_s), dt_s)
+        assert not state.power_limited
+        assert state.soc >= pack.soc_min - 1e-12
+
+    for soc, dt_s in ((0.99, DT_S), (0.5, 3600.0), (0.999, 1.0)):
+        state = pack.step(soc, -pack.available_charge_kw(soc, dt_s), dt_s)
+        assert not state.power_limited
+        assert state.soc <= 1.0 + 1e-12
 
 
 # ---------------------------------------------------------------------------

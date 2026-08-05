@@ -4,18 +4,25 @@ Positive power is discharge and negative is charge throughout. Current is
 solved from the quadratic P = V_oc*I - I^2*R rather than P/V_oc, so ohmic loss
 is the only efficiency term the model needs. State of charge is passed in and
 returned, never held here, so the controller can price candidate power splits
-without committing to them. Rationale for every default is in
-``docs/assumptions.md`` (B-03..B-06, O-05); pack *mass* belongs to ``mass.py``.
+without committing to them.
+
+Available power is energy-limited as well as rate-limited: it is the power the
+pack can sustain for the *whole* of a step, so it depends on the step length.
+That is what keeps coulomb counting from overshooting the cutoff within a step
+and handing the bus energy the pack does not have. Rationale for every default
+is in ``docs/assumptions.md`` (B-03..B-06, O-05); pack *mass* belongs to
+``mass.py``.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
 import numpy.typing as npt
 
-__all__ = ["BatteryPack", "BatteryState"]
+__all__ = ["BatteryPack", "BatteryState", "SOC_EPS"]
 
 FloatOrArray = float | npt.NDArray[np.float64]
 
@@ -45,6 +52,13 @@ CHARGE_C_RATE = 1.0
 SOC_MIN = 0.05
 SOC_SAFE_MIN = 0.20
 
+# Headroom below which a bound counts as reached. Limiting a step to the charge
+# above the cutoff lands state of charge on the bound to within rounding, so an
+# exact comparison would decide `at_cutoff` on floating-point dust and let a
+# mission loop creep toward the floor in ever-smaller steps without arriving.
+# Nine orders below anything physically meaningful, seven above the dust.
+SOC_EPS = 1.0e-9
+
 
 def _as_array(x: FloatOrArray) -> npt.NDArray[np.float64]:
     """Coerce to a float64 ndarray (possibly 0-d) without copying if able."""
@@ -67,7 +81,14 @@ def _require_positive(**values: float) -> None:
 
 @dataclass(frozen=True)
 class BatteryState:
-    """What the pack actually did over one integration step."""
+    """What the pack actually did over one integration step.
+
+    The two limit flags separate failures with different remedies.
+    ``rate_limited`` means the pack could not deliver that power for an instant,
+    let alone a step - a sizing problem. ``energy_limited`` means it could have,
+    but lacks the charge to hold it for the whole step - an energy-management
+    problem, or a timestep-resolution one. Both can be true at once.
+    """
 
     soc: float
     power_kw: float
@@ -77,8 +98,14 @@ class BatteryState:
     terminal_voltage_v: float
     ohmic_loss_kw: float
     at_cutoff: bool
-    power_limited: bool
+    rate_limited: bool
+    energy_limited: bool
     below_safe_floor: bool
+
+    @property
+    def power_limited(self) -> bool:
+        """True when the delivered power fell short of the command, either cause."""
+        return self.rate_limited or self.energy_limited
 
 
 @dataclass(frozen=True)
@@ -198,18 +225,93 @@ class BatteryPack:
         return _restore_scalar(loss, power_kw, soc)
 
     # -- Limits -------------------------------------------------------------
+    #
+    # Two independent ceilings bound every command. The *rate* ceiling is what
+    # the pack can push at all, and does not depend on the step length. The
+    # *energy* ceiling is what the charge between here and the cutoff can
+    # sustain for the whole step, and falls as the step grows. Availability is
+    # the lesser; which one bound it is the difference between a pack that is
+    # too small and a controller that asked for too much - see B-06.
 
-    def available_discharge_kw(self, soc: float) -> float:
-        """Deliverable bus power [kW]; zero at or below the hard cutoff."""
-        if soc <= self.soc_min:
-            return 0.0
+    def _max_power_current_a(self, soc: float) -> float:
+        """Current [A] at the ohmic ceiling, where dP/dI changes sign."""
+        return float(self.open_circuit_voltage(soc)) / (2.0 * self.internal_resistance_ohm)
+
+    def _bus_power_kw(self, current_a: float, soc: float) -> float:
+        """Bus power [kW] from a signed current - the inverse of the quadratic."""
+        v_oc = float(self.open_circuit_voltage(soc))
+        r = self.internal_resistance_ohm
+        return (v_oc * current_a - current_a * current_a * r) / WATTS_PER_KW
+
+    def _coulomb_limited_current_a(self, soc_headroom: float, dt_s: float) -> float:
+        """Constant current [A] that consumes ``soc_headroom`` in exactly ``dt_s``.
+
+        Exact regardless of voltage: coulomb counting is linear in current.
+        """
+        return soc_headroom * self.charge_capacity_ah * SECONDS_PER_HOUR / dt_s
+
+    def _discharge_rate_ceiling_kw(self, soc: float) -> float:
+        """Discharge power [kW] the pack can push, with no regard for how long."""
         return min(self.max_discharge_kw, float(self.ohmic_power_ceiling_kw(soc)))
 
-    def available_charge_kw(self, soc: float) -> float:
-        """Absorbable bus power [kW] as a positive magnitude; zero at full charge."""
-        if soc >= 1.0:
+    def _discharge_energy_ceiling_kw(self, soc: float, dt_s: float) -> float:
+        """Discharge power [kW] landing state of charge exactly on ``soc_min``.
+
+        Infinite when the charge above the cutoff would support more current
+        than the pack can push through its own resistance: the coulomb budget
+        then constrains nothing, and evaluating the quadratic there would run
+        back down the far side of the ohmic ceiling and report a *negative*
+        power. Open-circuit voltage is taken at the start of the step; see B-06
+        for the resulting bias.
+        """
+        headroom = soc - self.soc_min
+        if headroom <= SOC_EPS:
             return 0.0
-        return self.max_charge_kw
+        current = self._coulomb_limited_current_a(headroom, dt_s)
+        if current >= self._max_power_current_a(soc):
+            return math.inf
+        return self._bus_power_kw(current, soc)
+
+    def _charge_energy_ceiling_kw(self, soc: float, dt_s: float) -> float:
+        """Charge power [kW], positive magnitude, landing exactly on soc = 1.
+
+        Charging has no ohmic ceiling to guard: the bus supplies the loss as
+        well as the stored energy, so |P| = V_oc*|I| + I^2*R rises without
+        bound in |I|. The same quadratic gives it, with the current signed.
+        """
+        headroom = 1.0 - soc
+        if headroom <= SOC_EPS:
+            return 0.0
+        current = -self._coulomb_limited_current_a(headroom, dt_s)
+        return -self._bus_power_kw(current, soc)
+
+    def available_discharge_kw(self, soc: float, dt_s: float | None = None) -> float:
+        """Bus power [kW] deliverable, for the whole of ``dt_s`` when given.
+
+        Zero at or below the hard cutoff. With a step length it also respects
+        the charge above the cutoff, so it is non-increasing in ``dt_s``;
+        without one it is the rate limit alone, which a controller sizing a
+        step cannot rely on.
+        """
+        if soc - self.soc_min <= SOC_EPS:
+            return 0.0
+        rate_ceiling_kw = self._discharge_rate_ceiling_kw(soc)
+        if dt_s is None:
+            return rate_ceiling_kw
+        _require_positive(dt_s=dt_s)
+        return min(rate_ceiling_kw, self._discharge_energy_ceiling_kw(soc, dt_s))
+
+    def available_charge_kw(self, soc: float, dt_s: float | None = None) -> float:
+        """Absorbable bus power [kW], positive magnitude, for the whole of ``dt_s``.
+
+        Zero at full charge. The ``dt_s`` behaviour mirrors the discharge side.
+        """
+        if 1.0 - soc <= SOC_EPS:
+            return 0.0
+        if dt_s is None:
+            return self.max_charge_kw
+        _require_positive(dt_s=dt_s)
+        return min(self.max_charge_kw, self._charge_energy_ceiling_kw(soc, dt_s))
 
     def round_trip_efficiency(self, power_kw: float, soc: float) -> float:
         """Discharge-to-charge terminal voltage ratio [-] at equal current magnitude."""
@@ -223,28 +325,58 @@ class BatteryPack:
     def step(self, soc: float, power_kw: float, dt_s: float) -> BatteryState:
         """Integrate one timestep under a commanded bus power.
 
-        Applies the C-rate limit, the state-of-charge lockouts and the ohmic
-        ceiling, then coulomb-counts. An unachievable command is clamped and
+        Limits the command to what the pack can sustain for the whole step -
+        C-rate, ohmic ceiling, and the charge left this side of the boundary -
+        then coulomb-counts at the limited current and reports the bus power
+        that current actually produces. An unachievable command is limited and
         flagged, never raised.
+
+        Nothing is clamped after the fact. The three limits are compared as
+        currents, so state of charge arrives on the boundary rather than past
+        it, and the energy leaving the pack is the energy the bus receives.
         """
         _require_positive(dt_s=dt_s)
 
         commanded_kw = float(power_kw)
-        power = min(
-            max(commanded_kw, -self.available_charge_kw(soc)),
-            self.available_discharge_kw(soc),
+        charging = commanded_kw < 0.0
+        if charging:
+            boundary_soc, headroom = 1.0, 1.0 - soc
+            rate_ceiling_kw = self.max_charge_kw
+            energy_ceiling_kw = self._charge_energy_ceiling_kw(soc, dt_s)
+        else:
+            boundary_soc, headroom = self.soc_min, soc - self.soc_min
+            rate_ceiling_kw = self._discharge_rate_ceiling_kw(soc)
+            energy_ceiling_kw = self._discharge_energy_ceiling_kw(soc, dt_s)
+
+        rate_limited = abs(commanded_kw) > rate_ceiling_kw
+        energy_limited = abs(commanded_kw) > energy_ceiling_kw
+
+        # All three limits as current magnitudes, so the binding one can be
+        # integrated directly. The commanded and rate currents come from the
+        # same quadratic used everywhere else.
+        commanded_a = abs(float(self.current_from_power(commanded_kw, soc)))
+        rate_a = abs(
+            float(self.current_from_power(math.copysign(rate_ceiling_kw, commanded_kw), soc))
         )
-        power_limited = power != commanded_kw
+        energy_a = self._coulomb_limited_current_a(max(headroom, 0.0), dt_s)
+        current = math.copysign(min(commanded_a, rate_a, energy_a), commanded_kw)
 
         r = self.internal_resistance_ohm
         v_oc = float(self.open_circuit_voltage(soc))
-        current = float(self.current_from_power(power, soc))
+        power = (
+            self._bus_power_kw(current, soc)
+            if rate_limited or energy_limited
+            else commanded_kw
+        )
 
-        # Coulomb counting: state of charge integrates current, not bus power.
-        integrated_soc = soc - current * dt_s / (self.charge_capacity_ah * SECONDS_PER_HOUR)
-        new_soc = min(max(integrated_soc, 0.0), 1.0)
-        # A clamp here means the command was unsustainable for the whole step.
-        power_limited = power_limited or new_soc != integrated_soc
+        if current == 0.0:
+            new_soc = soc
+        elif energy_a <= min(commanded_a, rate_a):
+            # The energy limit is defined by where it lands, so land there.
+            new_soc = boundary_soc
+        else:
+            # Coulomb counting: state of charge integrates current, not power.
+            new_soc = soc - current * dt_s / (self.charge_capacity_ah * SECONDS_PER_HOUR)
 
         return BatteryState(
             soc=new_soc,
@@ -254,7 +386,8 @@ class BatteryPack:
             open_circuit_voltage_v=v_oc,
             terminal_voltage_v=v_oc - current * r,
             ohmic_loss_kw=current * current * r / WATTS_PER_KW,
-            at_cutoff=new_soc <= self.soc_min,
-            power_limited=power_limited,
+            at_cutoff=new_soc <= self.soc_min + SOC_EPS,
+            rate_limited=rate_limited,
+            energy_limited=energy_limited,
             below_safe_floor=new_soc < self.soc_safe_min,
         )

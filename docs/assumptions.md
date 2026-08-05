@@ -427,15 +427,110 @@ than the mission needs, and that surplus energy is dead mass under the fixed-MTO
 **Rationale:** Out of scope at this fidelity. Capacity fade, temperature-dependent resistance, and
 Peukert effects are noted as future work.
 
-### B-06 — State of charge limits
-**Value:** Hard cutoff 5%; recommended operating floor 20%. `UNVERIFIED`
+### B-06 — State of charge limits and energy-limited availability
+**Value:** Hard cutoff 5%; recommended operating floor 20%; boundary tolerance 1×10⁻⁹ SoC.
+`UNVERIFIED` (the two limits), `VERIFIED` (the availability model in form)
 **Rationale:** Protects against deep discharge. Discharge is locked out below the hard cutoff in
 simulation; charging is not, so the pack can always recover. The 20% floor is reported on every
 returned state and never enforced — it is advice to the energy-management controller (O-08), not a
 constraint, so the controller is free to trade against it and be graded on having done so.
-**Implementation:** a power command the pack cannot meet is clamped and flagged rather than raised,
+**Implementation:** a power command the pack cannot meet is limited and flagged rather than raised,
 for the same reason M-09 does not clamp negative fuel — the caller decides whether an unmet demand
 constitutes mission failure, and the optimizer needs the gradient either way.
+
+**Available power is energy-limited as well as rate-limited.** Checking the cutoff *before*
+integrating and clamping SoC *after* lets a step that starts above the floor integrate straight
+through it, so the bus is handed energy the pack does not hold. Availability is therefore the power
+the pack can sustain for the **whole** step, not the power it can deliver at the instant the step
+begins. Two ceilings bound every command:
+
+| Ceiling | Discharge | Charge (magnitude) | Depends on Δt |
+|---|---|---|---|
+| Rate | min(C_dis·E, V_oc²/4R) | C_chg·E | no |
+| Energy | V_oc·I − I²R at I = (SoC − SoC_min)·Q_nom·3600/Δt | V_oc·I + I²R at I = (1 − SoC)·Q_nom·3600/Δt | yes |
+
+The limiting current is exact irrespective of voltage, because coulomb counting is linear in
+current; only the conversion to power needs a voltage. Availability is the lesser of the two
+ceilings and is **non-increasing in Δt** — a longer step must be sustained from the same charge.
+
+**The energy ceiling must be capped at the ohmic ceiling before the quadratic is evaluated.**
+P(I) = V_oc·I − I²R turns over at I = V_oc/2R, so a coulomb budget larger than that current lands on
+the descending branch and returns a *negative* power: at SoC = 1.0 over a 1 s step the 10 kWh pack's
+budget of 97.7 kA evaluates to −438 MW, which as an availability would command the pack to charge at
+full power. Above that current the coulomb budget constrains nothing — every achievable power draws
+less — so it is reported as imposing no limit at all.
+
+**Charging is symmetric but not identical.** The same signed quadratic gives both directions: with
+I negative it returns −(V_oc·|I| + I²R), so the bus pays the loss on top of the stored energy, which
+is correct. Charging has no analogue of the ohmic ceiling, because |P| rises without bound in |I|,
+so no cap is needed on that side. SoC overshooting 1.0 at the top of the range is the same defect as
+overshooting the floor at the bottom and is fixed by the same construction.
+
+**Open-circuit voltage is taken at the start of the step.** For constant current over a step, the
+average OCV is the value at the midpoint SoC, so a midpoint evaluation would be exact. It is not
+adopted. Being exact requires the *same* voltage in `step()` as in the availability functions, and
+solving for the current implied by the step-average voltage folds the OCV slope into the quadratic
+as an effective resistance, R_eff = R + (V_max − V_min)·Δt/(2·Q_nom·3600) — 0.029 Ω against a true
+0.05 Ω at Δt = 60 s on the 10 kWh pack. That makes the reported current, terminal voltage and
+resistive loss functions of the timestep, and integrates the pack to second order while every other
+state in the simulation is explicit Euler at first order (S-03). The cost is not worth the gain,
+which is bounded by (V_max − V_min)·ΔSoC_step / 2V_oc:
+
+| Condition | ΔSoC over the step | Overstatement of delivered energy |
+|---|---|---|
+| 3C for 60 s (the worst case the C-rate allows) | 0.050 | 0.71% |
+| 0.5C loiter draw for 60 s | 0.008 | 0.12% |
+| Final step onto the cutoff, worked case below | 0.010 | 0.16% |
+
+**Bias:** Optimistic, and it falls on the endurance objective directly. Start-of-step OCV overstates
+the step-average, so each step delivers marginally more bus energy than the charge it removes is
+worth. Summed over a full discharge the model conserves ∫V_oc dq to 1.2×10⁻³ relative at the S-03
+60 s step and 1.2×10⁻⁴ at 6 s — first order in Δt, halving when the step halves, which confirms the
+residual is this bias and nothing else. It is three orders of magnitude below the defect it
+replaces, and it shrinks with the timestep, which the alternative would not.
+
+**Limiting is done in current space and nothing is clamped.** The commanded current, the C-rate
+current and the coulomb-budget current are compared as magnitudes, the smallest is integrated, and
+the reported bus power is V_oc·I − I²R at *that* current rather than the command. Clamping SoC after
+integrating is what broke conservation: it reported the full commanded power as delivered while
+pinning SoC at the floor, and the difference was energy the bus received that the pack never held.
+Because the binding limit is known before integrating, an energy-limited step is assigned its
+boundary directly and arrives on 5% or 100% exactly rather than within rounding of it, so no clamp
+is needed to keep SoC in range and none remains. A command that binds no limit is still reported
+verbatim, so a controller comparing delivered against commanded sees no floating-point dust.
+
+**The clamp question is closed.** A randomized sweep over pack size, SoC, command and timestep
+asserts two identities on every step: the coulomb count matches the integrated current, and the
+reported bus power is the quadratic at that same current. Landing *on* a bound rather
+than past it makes an exact comparison decide `at_cutoff` on floating-point dust — and would let a
+mission loop creep toward the floor in ever-halving steps without arriving — so both the cutoff test
+and the availability functions treat headroom below 1×10⁻⁹ SoC as zero. That is nine orders below
+anything physically meaningful and seven above the rounding, and it strands at most 10⁻⁸ kWh.
+
+**Availability depends on the timestep, and that coupling is accepted.** Any energy-aware limit must
+know the horizon it is being asked to sustain; a pack can deliver 3C for a second and not for an
+hour at the same SoC. The dependence is on a scalar duration passed in, not on the simulator, so the
+model stays standalone. `available_discharge_kw` and `available_charge_kw` take `dt_s` as optional:
+given one they return the sustainable power, omitting it they return the rate limit alone. The
+energy-management controller (O-08) **must pass it** — searching candidate splits against the rate
+limit alone will propose power the pack cannot hold, `step()` will reduce it, and the DC bus balance
+the controller believed it had (P-01) will not close. `step()` applies every limit itself regardless,
+so a caller that ignores the availability functions still cannot create energy; what it loses is the
+guarantee that its own bus balance holds.
+
+**Two limit flags, not one.** `rate_limited` means the pack could not deliver that power for an
+instant — a sizing problem, fixed by a bigger pack. `energy_limited` means it could have, but lacks
+the charge to hold it for the step — an energy-management problem, or a timestep-resolution one.
+Both can be true at once. `power_limited` remains available as their disjunction and is exactly
+equivalent to the delivered power differing from the command.
+
+**Worked case.** A 5 kWh pack at SoC = 0.06 commanded 15 kW (its full 3C rating) for 60 s holds
+0.0435 kWh above the floor. Unlimited, it delivered 0.25 kWh — 5.7× what it had — and landed at
+SoC = 0.0019, *below* the hard cutoff, with no flag raised, because the clamp is to [0, 1] and never
+fired. Limited, the charge above the floor supports 8.571 A, which at V_oc = 306 V is **2.616 kW**
+against the 15 kW commanded; it delivers 0.0436 kWh, lands on 0.05 exactly, and reports
+`energy_limited` with `rate_limited` false. Loiter terminates on this cutoff, so these are the last
+steps of every mission and the phantom energy went straight into the objective.
 
 ---
 
@@ -448,14 +543,21 @@ constitutes mission failure, and the optimizer needs the gradient either way.
 |---|---|
 | Generator | 0.95 |
 | Rectifier | 0.95 |
+| DC bus cabling | 0.99 — see P-04 |
 | Inverter | 0.95 |
 | Electric motor | 0.95 |
 | Propeller | see AE-11 |
 
 `UNVERIFIED`
 **Rationale:** Representative values for the component classes. Source side (engine → bus) is
-η_gen · η_rect = 0.9025; demand side (bus → shaft) is η_inv · η_motor = 0.9025. Including the
-propeller, every kilowatt of drag power costs approximately 1.45 kW of engine shaft power.
+η_gen · η_rect = 0.9025; demand side (bus → shaft) is η_inv · η_motor · η_cable = 0.8935; engine
+shaft to propeller shaft is 0.8064. Including the propeller, every kilowatt of drag power costs
+approximately 1.46 kW of engine shaft power.
+**This chain is why `powertrain.py` exists.** The previous implementation divided shaft demand by
+motor efficiency alone and treated the generator's bus output as engine shaft power, dropping the
+inverter, generator, rectifier and cabling stages entirely. For 30 kW of shaft demand it called for
+31.58 kW of engine shaft power where the full chain requires 37.20 kW — a factor of 1.178, so the
+old figure understated engine power, and with it fuel burn, by 15.1%.
 
 ### P-02 — Efficiencies constant with load
 **Value:** No part-load derating. `UNVERIFIED`
@@ -469,6 +571,25 @@ power fractions.
 at a fidelity that would produce a penalty gradient — distributed propulsion aerodynamic benefit
 and AC/DC topology differences are not represented — so including them would add dimensions the
 optimizer cannot resolve. As with B-01, this exclusion is stated deliberately.
+
+### P-04 — DC bus cabling and distribution efficiency
+**Value:** 0.99. `UNVERIFIED`
+**Rationale:** High-voltage DC distribution over a short airframe run. Previously neglected
+entirely; it is made explicit here so that it is a stated assumption rather than a silent omission.
+It is the fifth stage in the chain and the only one that is purely resistive — there is no
+excitation to sustain — so it carries no no-load loss term and stays constant in both modes of O-11.
+**Bias:** Mildly optimistic if cable runs are long or the bus sits at the low end of the 300–400 V
+range (B-03), since distribution loss scales with the square of current at fixed power.
+
+### P-05 — System efficiency metric definition
+**Value:** η_system = P_propulsive / (P_fuel,chemical + P_battery,discharge). `VERIFIED` (as a
+definition)
+**Rationale:** Matches deliverable 8.3. Propulsive power is thrust power — drag power plus the rate
+of potential energy gain — and arrives from `aerodynamics.py`; fuel chemical power is mass flow
+times lower heating value, from `engine.py`. Battery **charging is excluded from the denominator**:
+it is not an energy input to the system, and admitting negative values would let a charging step
+inflate the metric without bound as the denominator passed through zero. The denominator is
+guarded, returning zero rather than raising.
 
 ---
 
@@ -515,6 +636,18 @@ These must be resolved and this document updated before final submission.
 | O-08 | Energy-management controller | Fuzzy adaptive vs PI feedback vs fixed equivalence factor | Gene set, innovation claim |
 | O-09 | Design limit load factor | 3.8 (FAR 23 normal category, manned) vs 2.5–3.0 (typical MALE-class UAV) | M-03, wing mass |
 | O-10 | Usable tank volume fraction | 0.5 (current) vs 0.30–0.35 (inter-spar box) | M-06, whether the volume check binds |
+| O-11 | Load-dependent component efficiency | Constant stage efficiencies (current default) vs a no-load-plus-load-squared loss model (both implemented behind `load_dependent`) | P-01, P-02, loiter power demand |
+
+**O-11.** The vehicle loiters at roughly a third of the inverter and motor ratings, which is where a
+constant-efficiency assumption is least accurate, and four stages compound. Under the loss model
+P_loss = a + b·P_out², calibrated so each stage recovers its rated efficiency at its rating with 30%
+of the rated loss load-independent, the demand chain falls from 0.8935 to 0.8833 at 30 kW of shaft
+demand on a 90 kW bus rating — 1.15% more bus power for the same thrust. The compounded chain moves
+less, 0.8064 to 0.7995, because the generator and rectifier sit nearer their own best point at that
+condition. Note that the model peaks *below* rated, at √(f/(1−f)) = 65.5% of the rating where the
+no-load and load losses are equal, and falls back to the rated value at 100% — efficiency is not
+monotonic in load. Sizing each stage is therefore not a free choice: rating a machine far above its
+cruise load costs efficiency at cruise.
 
 **O-09.** 3.8 is a manned-aircraft certification value from FAR 23 normal category with no direct
 applicability to an unmanned vehicle. Dropping the limit factor from 3.8 to 2.5 scales wing mass by
@@ -551,4 +684,6 @@ actual editions before citation in the technical report.
 | — | Initial version. Fixed-mass group revised from 450 kg lumped to 250 kg itemized (M-02) following explicit modelling of wing and electrical chain masses. Engine specific power revised from 1.5 to 3.5 kW/kg (M-04). Constant SFC replaced by Willans line (E-01). |
 | 2026-08-04 | **`mass.py` build.** M-03: N_z corrected from limit to ultimate load factor — the entry previously listed a single row `N_z = 3.8`, which fed the regression the limit value and under-predicted wing mass by 22%; equation form and units promoted to `VERIFIED`, parameter values remain `UNVERIFIED`. M-06: the claim that the fuel volume check penalizes high aspect ratio corrected — wing *area* is the sensitive variable (binds below S ≈ 7 m²), the aspect-ratio crossover at AR ≈ 46 is physically irrelevant; usable-volume fraction downgraded to `PLACEHOLDER`. O-09 (limit load factor) and O-10 (tank volume fraction) opened. |
 | 2026-08-04 | **`engine.py` build.** E-04: recorded that the Willans coefficients are held altitude-invariant and that only maximum power lapses; neglecting the colder-inlet SFC gain is conservative. E-05: floor fixed at 15% of rated, both idle and shutdown modes implemented behind a flag pending O-04, restart fuel marked `PLACEHOLDER` at 0.0 kg and flagged as optimistic. |
+| 2026-08-05 | **`powertrain.py` build, and `battery.py` limiting moved into current space.** P-01: cabling added as a fifth stage, the compounded chain recorded as 0.8064 engine shaft to propeller shaft, and the previous implementation's omission quantified — 31.58 kW of engine shaft power called for against 37.20 kW required at 30 kW of shaft demand, understating fuel burn by 15.1%. P-04 opened for DC distribution at 0.99, previously neglected entirely. P-05 opened to fix the system efficiency metric, with battery charging excluded from the denominator. O-11 opened for load-dependent stage efficiency; recorded that the model peaks at 65.5% of rating rather than rising monotonically to it, and that the demand chain falls 1.15% at the loiter condition while the compounded chain falls 0.86%. B-06: limiting moved from power space into current space and the SoC clamp removed outright rather than retained as a guard — an energy-limited step now lands on its boundary exactly, and the reported bus power is the quadratic at the integrated current rather than the command. `available_discharge_kw` and `available_charge_kw` take `dt_s` as optional rather than required, restoring the rate-limit-only query; recorded that the controller must pass it or its own bus balance will not close. |
+| 2026-08-05 | **`battery.py` revision — energy-limited discharge.** B-06: rewritten and retitled. Available power is now the power sustainable for the whole step, not the instantaneous capability, closing a path by which a step starting above the cutoff integrated through it and delivered energy the pack did not hold — 0.25 kWh against 0.0435 kWh available in the worked 5 kWh case, and the resulting SoC of 0.0019 sat below the hard floor with no flag, because the clamp is to [0, 1] and never fired. Availability model promoted to `VERIFIED` in form. Recorded: the energy ceiling must be capped at the ohmic ceiling before the quadratic is evaluated, or it returns large negative powers at short timesteps; start-of-step OCV retained over a midpoint evaluation, with the R_eff closed form for the midpoint case and the resulting optimistic bias tabulated (0.71% worst case per step, 1.2×10⁻³ over a full discharge at Δt = 60 s, first order in Δt); the SoC clamp is no longer reachable and a 1×10⁻⁹ boundary tolerance added so `at_cutoff` is not decided on rounding; the Δt coupling of availability accepted and justified. `power_limited` split into `rate_limited` and `energy_limited` with the old name kept as their disjunction. B-04 deliberately **not** changed: the C-rate limit remains a bus-power cap of C·E_kWh, not a current cap of C·Q_nom, which would have silently restated the 10 kWh pack's 30 kW limit as 29.63 kW. |
 | 2026-08-04 | **`battery.py` build.** B-03: internal resistance scaling model recorded as R(E) = 0.05 · (10 / E_kWh), implemented behind `scale_resistance` with the scaled form as default pending O-05; the quadratic current solution and the Q_nom = E/V_nominal consistency promoted to `VERIFIED` in form; the naive P/V_oc error quantified at 1.26% in current and 0.377 kW in unbilled loss at the reference condition; ohmic power ceiling V_oc²/(4R) recorded as an enforced guard. B-04: retitled to cover both rate limits, charge C-rate of 1C recorded, and the previous engine-rated power limit identified as an implied 15C on a 5 kWh pack. B-06: clamp-and-flag behaviour recorded, and the 20% floor documented as reported-not-enforced. |
