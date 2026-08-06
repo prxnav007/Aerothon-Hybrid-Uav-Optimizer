@@ -216,13 +216,15 @@ Each of these was already made once. The symptom is what you will recognise.
 
 ## 7. Open decisions
 
-They are listed in **`docs/assumptions.md` §9 (O-01 … O-11)** and are not duplicated here.
+They are listed in **`docs/assumptions.md` §9 (O-01 … O-12, with O-04 resolved)** and are not
+duplicated here.
 
 The rule: an open decision means **both options are implemented behind a flag**, with the current
-default recorded in the entry — `allow_shutdown` (O-04), `scale_resistance` (O-05),
-`load_dependent` (O-11), `oswald_efficiency(method=...)` (O-01). That is what lets the decision be
-resolved later by sweeping the flag rather than by rewriting the model. **Do not silently resolve
-one**, and do not delete the branch you think is wrong.
+default recorded in the entry — `scale_resistance` (O-05), `load_dependent` (O-11),
+`oswald_efficiency(method=...)` (O-01). Resolved alternatives are retained too: O-04 defaults to
+shutdown but keeps idle behind `allow_shutdown`. That is what lets a decision be resolved or
+revisited by sweeping the flag rather than by rewriting the model. **Do not silently resolve one**,
+and do not delete the branch you think is wrong.
 
 ## 8. How to work on this
 

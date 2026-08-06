@@ -351,19 +351,21 @@ mission is infeasible there and the engine or the altitude must change — this 
 O-07.
 
 ### E-05 — Low-power operating floor
-**Value:** Floor at 15% of rated power. Mode `OPEN` — see O-04. Restart fuel 0.0 kg `PLACEHOLDER`.
+**Value:** Floor at 15% of rated power; shutdown is the resolved default (O-04). Restart fuel
+0.0 kg `PLACEHOLDER`.
 **Rationale:** The Willans line predicts SFC → ∞ as power → 0, which is correct in the limit but
 must not be extrapolated below roughly 15–20% of rated power. Whether the engine idles (burning the
 parasitic term, producing near-zero output) or shuts off (burning nothing, with a restart penalty)
 is a modelling decision with real consequences for the energy-management strategy.
-**Implementation:** both modes are implemented behind `allow_shutdown` rather than one being
-chosen, so O-04 can be resolved by sweeping the flag. In idle mode a below-floor command delivers
+**Implementation:** both modes remain implemented behind `allow_shutdown` for sensitivity. In idle
+mode a below-floor command delivers
 15% of rated power and the corresponding fuel flow; the surplus generation is handed back to the
-caller to dispose of into the battery. In shutdown mode it delivers zero power and zero fuel.
+caller to dispose of into the battery. In shutdown mode it delivers zero power and zero fuel; the
+simulator detects each off-to-on transition and charges `restart_fuel_kg`.
 **Bias:** Optimistic. A zero-cost restart flatters shutdown mode — a real turboshaft start consumes
 fuel, takes seconds of spool-up during which no power is available, and consumes engine life. The
-model is stateless by design, so it reports `shut_down` in the returned state and leaves the caller
-to detect the off-to-on transition and charge `restart_fuel_kg` against it.
+engine model is stateless by design, so it reports `shut_down` in the returned state; the simulator
+is the caller that detects the off-to-on transition and charges `restart_fuel_kg` against it.
 
 ---
 
@@ -620,6 +622,8 @@ default calibration, a = 0.36 kg/kWh and η_source = 0.9025, giving s_switch = 4
 **Rationale:** Differentiating the Hamiltonian with respect to engine shaft power removes the
 Willans intercept `b`, because that parasitic fuel flow is already sunk while the engine is on.
 The resulting modulation threshold therefore uses marginal fuel consumption, not average SFC.
+Controllers therefore anchor ratio parameterizations on `switching_s`; `neutral_s` remains a
+logged average-cost diagnostic and is retained for the explicit `FixedECMS.at_neutral()` comparison.
 This differs from `base.py`'s neutral factor: using the default rated SFC of 0.45 kg/kWh gives
 s_neutral = 5.970. The neutral factor prices an average bus kWh at a stated operating point;
 s_switch determines whether another engine kW lowers the Hamiltonian. Neither is the separate
@@ -646,6 +650,15 @@ literal 1×10⁻⁹ relative Hamiltonian-agreement requirement failed in 14 inte
 8.68×10⁻⁹): the continuous solver was lower than the nearest 0.05 kW grid point, so this is oracle
 quantisation rather than a local-minimum failure.
 
+### C-05 — PI-ECMS reference state and default gain
+**Value:** `soc_ref = 0.6`, `kp = 5.0`, and `s0_ratio = 1.0` relative to `switching_s`.
+`UNVERIFIED`
+**Rationale:** The reference SoC fixes the point where proportional correction is zero and is held
+out of the genetic chromosome to avoid an extra search dimension. The gain is a reproducible
+starting point, not a tuned claim; Part E sweeps it from 0 to 20 together with the anchor ratio.
+**Bias:** Unknown. Larger gain retains more charge at low SoC but can increase engine cycling and
+part-load operation; the direction depends on the mission and restart model.
+
 ### S-01 — Fill-to-MTOW fuel policy
 **Value:** Fuel loaded = MTOW − dry mass. `VERIFIED`
 **Rationale:** Makes the powertrain-versus-fuel trade explicit and direct. Every kilogram spent on
@@ -671,14 +684,14 @@ conservative for endurance in this case. This measured bound is configuration-sp
 proof for every controller or design.
 
 ### S-04 — Reserves and limits
-**Value:** Landing fuel reserve 5 kg; minimum usable fuel for feasibility 20 kg; maximum mission
-time 24 h. `UNVERIFIED`
-**Rationale:** The reserve is withheld for descent and landing; `feasibility.py` must determine
-whether it is sufficient for a particular aircraft and trajectory. The 24 h cap is a safety bound
-on the simulation loop, not a physical limit. The simulator prevents loiter from crossing the
-reserve, then permits descent and landing to consume it. Consequently the final fuel may be below
-the loiter-exit threshold; requiring both loiter-exit and post-landing fuel to exceed the same
-number would make the reserve unavailable for the phases it exists to cover.
+**Value:** Post-landing reserve 5.0 kg; descent-and-landing allocation 4.7 kg; minimum usable fuel
+for feasibility 20 kg; maximum mission time 24 h. `UNVERIFIED`
+**Rationale:** On the 86.779 kW band-interpretation aircraft, the resolved shutdown policy and
+default PI controller consumed 4.257 kg after loiter. A phase-only cutoff-SoC check consumed
+4.108 kg. The default uses the larger measurement, adds 10%, and rounds upward to 0.1 kg. Loiter
+therefore stops at 9.7 kg, descent and landing may spend 4.7 kg, and 5.0 kg must remain after
+landing. Falling below that post-landing reserve is reported as `fuel_reserve_shortfall`. The 24 h
+cap is a loop safety bound rather than a physical limit.
 
 ### S-05 — Default cruise altitude and vertical rates
 **Value:** Cruise altitude 3000 m; target climb rate +2.0 m/s; target descent rate −3.0 m/s.
@@ -711,18 +724,19 @@ durations are conceptual mission inputs retained as explicit factory arguments, 
 performance claims. Climb and descent terminate on altitude rather than time. Loiter defaults to
 the solved minimum-power condition but retains fixed-speed and best-L/D modes for O-06.
 
-### S-07 — Pre-dispatch neutral-factor operating point
+### S-07 — Pre-dispatch equivalence-factor reference point
 **Value:** Engine-only, demand-following shaft power, clamped to the current lapsed engine range;
-source-chain efficiency is evaluated at that same power. `UNVERIFIED` (control-policy choice)
+source-chain efficiency is evaluated at that same power for both `neutral_s` and `switching_s`.
+`UNVERIFIED` (control-policy choice)
 **Rationale:** The actual engine SFC is an outcome of the ECMS split. It therefore cannot be used to
 compute `neutral_s` before the controller and split solver run without a fixed-point iteration or a
 previous-step state. The engine-only operating point is deterministic on the first step, remains
 load-dependent under O-11, and introduces no controller history into the simulator. The actual SFC
-is still logged after the split.
-**Bias:** A controller that scales directly from `neutral_s` sees an engine-only reference rather
-than the eventual hybrid operating point. This seam should be included in controller sensitivity
-testing; iterating the controller and split is a distinct policy, not a neutral implementation
-detail.
+is still logged after the split. `switching_s` uses the Willans slope at that same reference and is
+the controller anchor; `neutral_s` is diagnostic only.
+**Bias:** Under O-11, using average source-chain efficiency at the reference power only
+approximates the exact marginal bus-power derivative. Iterating the controller and split, or using
+that derivative directly, is a distinct policy rather than a neutral implementation detail.
 
 ### CD-01 — Maximum stall speed for constraint sizing
 **Value:** V_stall,max = V_landing / 1.2 = 45 / 1.2 = 37.5 m/s at sea level. `UNVERIFIED`
@@ -754,8 +768,9 @@ climb curve still sizes airborne peak power, but it is not a substitute for fiel
 The reference boost is the 10 kWh pack's 3C discharge rating from B-04; it bypasses generator and
 rectifier losses but still supplies the motor-side demand chain. The report design case combines
 cruise at the 3000 m default, +2 m/s transient climb at 3000 m, and a +0.5 m/s service-ceiling check
-at 10 000 m. These point constraints do not prove that the battery can sustain the boost or that
-the mass and fuel-volume budgets close.
+at 10 000 m under the ceiling-required interpretation. The band interpretation in O-12 omits that
+imposed ceiling constraint. These point constraints do not prove that the battery can sustain the
+boost or that the mass and fuel-volume budgets close.
 **Bias:** The power margin is conservative; treating the full 3C pack rating as continuously
 available throughout climb is optimistic until mission energy is checked.
 
@@ -778,7 +793,6 @@ These must be resolved and this document updated before final submission.
 | O-01 | Oswald efficiency treatment | Raymer AR correlation vs fixed documented value with sensitivity sweep | AE-07, aspect-ratio result validity |
 | O-02 | Wing area and aspect ratio as design variables | Optimize both vs freeze with written justification | AE-04, M-03, gene set |
 | O-03 | Propeller efficiency model | Constant 0.85 vs phase-dependent vs variable-pitch assumption | AE-11, peak power demand |
-| O-04 | Engine low-power behaviour | Idle (burn parasitic term) vs shutdown with restart penalty | E-05, energy-management strategy |
 | O-05 | Internal resistance scaling | Fixed 0.05 Ω vs scaled with pack capacity (both implemented; scaled is the default) | B-03 |
 | O-06 | Loiter speed | Solved from minimum-power/stall-margin condition each step vs fixed | AE-05, AE-06, mission profile |
 | O-07 | Cruise altitude | Fixed at a chosen value vs treated as a design variable | E-04, mission profile |
@@ -786,6 +800,24 @@ These must be resolved and this document updated before final submission.
 | O-09 | Design limit load factor | 3.8 (FAR 23 normal category, manned) vs 2.5–3.0 (typical MALE-class UAV) | M-03, wing mass |
 | O-10 | Usable tank volume fraction | 0.5 (current) vs 0.30–0.35 (inter-spar box) | M-06, whether the volume check binds |
 | O-11 | Load-dependent component efficiency | Constant stage efficiencies (current default) vs a no-load-plus-load-squared loss model (both implemented behind `load_dependent`) | P-01, P-02, loiter power demand |
+| O-12 | Meaning of the stated 3–10 km cruise-altitude band | Require a 10 km service ceiling vs select cruise altitude within the band and report achievable ceiling | CD-04, engine rating, fuel mass |
+
+**O-04 (resolved 2026-08-05).** Engine shutdown is the default because the series-hybrid battery
+can carry low bus demand while the turboshaft is off; idle mode remains available for sensitivity.
+On the band-interpretation aircraft with default PI control, shutdown increased simulated time
+from 14.203 h to 15.606 h and shut the engine down for 21.91% of loiter. The idle case missed the
+post-landing reserve by 0.170 kg under the shutdown-sized descent allocation. Free restarts remain
+optimistic: 0.1 kg per restart reduced endurance to 14.610 h over 163 restarts, while 0.5 kg reduced
+it to 12.028 h over 120 restarts and caused a reserve shortfall. These sensitivities also expose
+timestep-dependent chatter until a dwell-time or start-transient model is added.
+
+**O-12.** Both readings are retained for presentation. Imposing a 10 km service ceiling selects
+14.045 m² and 133.270 kW, bound by `ceiling_10km`, with 807.120 kg dry mass and 192.880 kg fuel.
+Treating 3–10 km as the selectable cruise band and sizing only at the chosen 3 km cruise/climb
+conditions selects 7.592 m² and 86.779 kW, bound by `cruise_3km`, with 711.390 kg dry mass and
+288.610 kg fuel. The latter design's achievable 0.5 m/s service ceiling is 5.842 km and its
+zero-rate absolute ceiling is 6.825 km. No interpretation is silently preferred for judging; the
+band design is used for the controller study because the mission flies at 3 km.
 
 **O-06.** The mission profile now represents speed as a mode. `MIN_POWER` is the current loiter
 default, `FIXED` accepts an explicit airspeed, and `BEST_LD` is available for range-oriented
@@ -839,6 +871,7 @@ actual editions before citation in the technical report.
 
 | Date | Change |
 |---|---|
+| 2026-08-05 | **Marginal controller anchor, reserve semantics, and sizing interpretations.** Added `switching_s` to the controller context and made it the fixed-ratio and PI-ratio anchor; `neutral_s` remains an average-cost diagnostic. Resolved O-04 to engine shutdown by default while retaining idle sensitivity, and added simulator accounting for off-to-on restart fuel. Split S-04 into 4.7 kg for measured descent/landing consumption and a separate 5.0 kg post-landing reserve, with explicit reserve-shortfall reporting. Opened O-12 and recorded both constraint results: 133.270 kW with a required 10 km ceiling versus 86.779 kW when the stated altitude is treated as a selectable cruise band. |
 | — | Initial version. Fixed-mass group revised from 450 kg lumped to 250 kg itemized (M-02) following explicit modelling of wing and electrical chain masses. Engine specific power revised from 1.5 to 3.5 kW/kg (M-04). Constant SFC replaced by Willans line (E-01). |
 | 2026-08-04 | **`mass.py` build.** M-03: N_z corrected from limit to ultimate load factor — the entry previously listed a single row `N_z = 3.8`, which fed the regression the limit value and under-predicted wing mass by 22%; equation form and units promoted to `VERIFIED`, parameter values remain `UNVERIFIED`. M-06: the claim that the fuel volume check penalizes high aspect ratio corrected — wing *area* is the sensitive variable (binds below S ≈ 7 m²), the aspect-ratio crossover at AR ≈ 46 is physically irrelevant; usable-volume fraction downgraded to `PLACEHOLDER`. O-09 (limit load factor) and O-10 (tank volume fraction) opened. |
 | 2026-08-04 | **`engine.py` build.** E-04: recorded that the Willans coefficients are held altitude-invariant and that only maximum power lapses; neglecting the colder-inlet SFC gain is conservative. E-05: floor fixed at 15% of rated, both idle and shutdown modes implemented behind a flag pending O-04, restart fuel marked `PLACEHOLDER` at 0.0 kg and flagged as optimistic. |

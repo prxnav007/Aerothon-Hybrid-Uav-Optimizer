@@ -15,7 +15,7 @@ from src.control.base import ControlContext, EMSController
 
 __all__ = ["PIECMS"]
 
-# Proposed assumptions entries C-03 and C-04 are included in the task handoff.
+# PI defaults are documented in assumptions.md C-05.
 KP_DEFAULT = 5.0
 SOC_REF_DEFAULT = 0.6
 S0_RATIO_DEFAULT = 1.0
@@ -33,10 +33,9 @@ def _finite_parameter(name: str, value: float) -> float:
 class PIECMS(EMSController):
     """Adaptive ECMS with proportional state-of-charge feedback.
 
-    ``soc_ref`` sets where the feedback correction is zero; it is the
-    charge-neutral point only when the selected anchor is neutral. Exactly one
-    anchor is active: absolute ``s0`` or operating-point-relative ``s0_ratio``.
-    The ratio default tracks the changing engine break-even point, while
+    ``soc_ref`` sets where the feedback correction is zero. Exactly one anchor
+    is active: absolute ``s0`` or switching-factor-relative ``s0_ratio``.
+    The ratio default tracks the marginal engine-on switching point, while
     ``soc_ref`` is intended to stay fixed rather than become an optimizer gene.
     Despite the class name, this implementation has no integral term.
     """
@@ -68,22 +67,22 @@ class PIECMS(EMSController):
                 _finite_parameter("s0_ratio", self.s0_ratio),
             )
 
-    def _anchor(self, neutral_s: float) -> float:
+    def _anchor(self, switching_s: float) -> float:
         """Return the active anchor at one engine operating point."""
-        neutral = _finite_parameter("neutral_s", neutral_s)
-        if neutral <= 0.0:
-            raise ValueError(f"neutral_s must be positive, got {neutral_s!r}")
+        switching = _finite_parameter("switching_s", switching_s)
+        if switching <= 0.0:
+            raise ValueError(f"switching_s must be positive, got {switching_s!r}")
         if self.s0 is not None:
             return self.s0
         ratio = self.s0_ratio
         if ratio is None:
             raise RuntimeError("validated controller has no equivalence-factor anchor")
-        return ratio * neutral
+        return ratio * switching
 
     def equivalence_factor(self, ctx: ControlContext) -> float:
         """Return the raw proportional-feedback equivalence factor."""
-        # Proportional SoC feedback around the selected neutral anchor.
-        return self._anchor(ctx.neutral_s) + self.kp * (self.soc_ref - ctx.soc)
+        # Proportional SoC feedback around the marginal switching anchor.
+        return self._anchor(ctx.switching_s) + self.kp * (self.soc_ref - ctx.soc)
 
     @property
     def name(self) -> str:
@@ -95,17 +94,17 @@ class PIECMS(EMSController):
             raise RuntimeError("validated controller has no equivalence-factor anchor")
         return f"pi_kp={self.kp:.2f}_r={ratio:.2f}"
 
-    def reachable_range(self, neutral_s: float) -> tuple[float, float]:
+    def reachable_range(self, switching_s: float) -> tuple[float, float]:
         """Raw equivalence-factor range from full to empty state of charge."""
-        anchor = self._anchor(neutral_s)
+        anchor = self._anchor(switching_s)
         at_full = anchor + self.kp * (self.soc_ref - 1.0)
         at_empty = anchor + self.kp * self.soc_ref
         return at_full, at_empty
 
-    def straddles_neutral(self, neutral_s: float) -> bool:
-        """Whether the raw SoC sweep reaches both sides of ``neutral_s``."""
-        neutral = _finite_parameter("neutral_s", neutral_s)
-        if neutral <= 0.0:
-            raise ValueError(f"neutral_s must be positive, got {neutral_s!r}")
-        lower, upper = self.reachable_range(neutral)
-        return lower < neutral < upper
+    def straddles_switching(self, switching_s: float) -> bool:
+        """Whether the raw SoC sweep reaches both sides of ``switching_s``."""
+        switching = _finite_parameter("switching_s", switching_s)
+        if switching <= 0.0:
+            raise ValueError(f"switching_s must be positive, got {switching_s!r}")
+        lower, upper = self.reachable_range(switching)
+        return lower < switching < upper

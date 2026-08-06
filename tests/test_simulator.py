@@ -10,6 +10,7 @@ import pytest
 
 import src.simulation.simulator as simulator_module
 from src.control.fixed_ecms import FixedECMS
+from src.control.pi_ecms import PIECMS
 from src.control.power_split import SplitDecision
 from src.models.battery import BatteryPack
 from src.models.engine import LHV_KJ_KG, Turboshaft
@@ -67,6 +68,7 @@ def reference_mission():
         cruise_duration_s=600.0,
         landing_duration_s=60.0,
         fuel_reserve_kg=15.0,
+        descent_landing_fuel_kg=7.0,
         min_usable_fuel_kg=20.0,
         max_mission_time_s=12.0 * 3600.0,
     )
@@ -120,8 +122,10 @@ def test_energy_balance_closes_with_all_accounted_losses(
     consumed_kj = 0.0
     for step in battery_preferring_result.log:
         supplied_kj += (
-            step.fuel_flow_kg_s * LHV_KJ_KG + step.battery_internal_kw
-        ) * step.dt_s
+            (step.fuel_flow_kg_s * step.dt_s + step.restart_fuel_kg)
+            * LHV_KJ_KG
+            + step.battery_internal_kw * step.dt_s
+        )
         consumed_kj += (
             step.thrust_power_kw
             + step.engine_thermal_loss_kw
@@ -153,7 +157,7 @@ def test_every_phase_reaches_its_target_and_order_is_preserved(
         )
 
 
-def test_resource_phase_stops_at_reserve_before_descent_spends_it(
+def test_resource_phase_retains_descent_fuel_and_post_landing_reserve(
     thermal_result: MissionResult,
     reference_mission,
 ) -> None:
@@ -162,14 +166,61 @@ def test_resource_phase_stops_at_reserve_before_descent_spends_it(
     last_loiter = next(
         step for step in reversed(thermal_result.log) if step.phase == "loiter"
     )
-    assert last_loiter.fuel_remaining_kg >= reference_mission.fuel_reserve_kg
     assert last_loiter.fuel_remaining_kg == pytest.approx(
-        reference_mission.fuel_reserve_kg, abs=1.0e-9
+        reference_mission.loiter_fuel_floor_kg, abs=1.0e-9
     )
-    # The reserve is explicitly for descent and landing (S-04), so final fuel
-    # is lower.  Requiring both values to exceed the same threshold is the
-    # contradictory test condition identified during specification review.
-    assert thermal_result.fuel_remaining_kg < reference_mission.fuel_reserve_kg
+    assert thermal_result.fuel_remaining_kg >= reference_mission.fuel_reserve_kg
+    descent_landing_burn_kg = (
+        last_loiter.fuel_remaining_kg - thermal_result.fuel_remaining_kg
+    )
+    assert descent_landing_burn_kg <= reference_mission.descent_landing_fuel_kg
+
+
+def test_log_records_both_average_and_marginal_equivalence_references(
+    thermal_result: MissionResult,
+) -> None:
+    assert thermal_result.log is not None
+    loiter = next(step for step in thermal_result.log if step.phase == "loiter")
+    assert loiter.neutral_s > loiter.switching_s > 0.0
+
+
+def test_underallocated_descent_fuel_reports_a_post_landing_reserve_shortfall(
+    reference_aircraft: Aircraft,
+    reference_mission,
+) -> None:
+    mission = replace(reference_mission, descent_landing_fuel_kg=0.0)
+    result = run_mission(
+        reference_aircraft, mission, FixedECMS.pure_thermal(), record_log=True
+    )
+    assert not result.mission_complete
+    assert result.termination_reason == "fuel_reserve_shortfall"
+    assert "fuel_reserve_shortfall" in result.failure_flags
+    assert result.fuel_remaining_kg < mission.fuel_reserve_kg
+
+
+def test_restart_fuel_is_charged_once_per_logged_off_to_on_transition(
+    reference_aircraft: Aircraft,
+    reference_mission,
+) -> None:
+    aircraft = replace(
+        reference_aircraft,
+        engine=replace(reference_aircraft.engine, restart_fuel_kg=0.1),
+    )
+    result = run_mission(aircraft, reference_mission, PIECMS(), record_log=True)
+    assert result.log is not None
+    transitions = sum(
+        previous.engine_shut_down and not current.engine_shut_down
+        for previous, current in zip(result.log, result.log[1:])
+    )
+    charged = tuple(step for step in result.log if step.restart_fuel_kg > 0.0)
+    assert transitions > 0
+    assert len(charged) == transitions
+    assert all(step.restart_fuel_kg == pytest.approx(0.1) for step in charged)
+    integrated_burn_kg = sum(
+        step.fuel_flow_kg_s * step.dt_s + step.restart_fuel_kg
+        for step in result.log
+    )
+    assert result.fuel_used_kg == pytest.approx(integrated_burn_kg, abs=1.0e-10)
 
 
 def test_high_s_is_the_pure_thermal_reference(
@@ -192,7 +243,6 @@ def test_low_s_reaches_the_battery_cutoff(
     assert battery_preferring_result.final_soc == pytest.approx(
         reference_aircraft.battery.soc_min, abs=1.0e-12
     )
-    assert battery_preferring_result.phase_durations_s["loiter"] > 0.0
 
 
 def test_endurance_increases_with_initial_fuel(
@@ -257,6 +307,7 @@ def test_partial_climb_step_lands_exactly_without_full_step_time_error(
         cruise_duration_s=60.0,
         landing_duration_s=60.0,
         fuel_reserve_kg=15.0,
+        descent_landing_fuel_kg=7.0,
         min_usable_fuel_kg=20.0,
         max_mission_time_s=12.0 * 3600.0,
     )

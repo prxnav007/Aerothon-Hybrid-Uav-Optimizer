@@ -26,7 +26,7 @@ SIGMA_6KM = 0.538
 
 @pytest.fixture
 def eng() -> Turboshaft:
-    return Turboshaft(rated_power_kw=RATED_KW)
+    return Turboshaft(rated_power_kw=RATED_KW, allow_shutdown=False)
 
 
 def _sweep(lo: float = 1.0, hi: float = RATED_KW, n: int = 40) -> np.ndarray:
@@ -222,6 +222,12 @@ def test_shutdown_mode_delivers_nothing_and_burns_nothing():
     assert state.load_fraction == 0.0
 
 
+def test_shutdown_is_the_resolved_default_low_power_mode():
+    state = Turboshaft(RATED_KW).operate(2.0)
+    assert state.shut_down
+    assert state.fuel_flow_kg_s == 0.0
+
+
 def test_commanding_exactly_at_the_floor_is_not_idle(eng):
     state = eng.operate(eng.idle_power_kw)
     assert not state.at_idle
@@ -229,7 +235,7 @@ def test_commanding_exactly_at_the_floor_is_not_idle(eng):
 
 
 def test_the_two_low_power_modes_disagree_on_fuel(eng):
-    """O-04 is open precisely because this difference is not small."""
+    """The retained idle branch quantifies the resolved O-04 alternative."""
     idling = eng.operate(2.0)
     stopped = Turboshaft(RATED_KW, allow_shutdown=True).operate(2.0)
     assert idling.fuel_flow_kg_s > stopped.fuel_flow_kg_s == 0.0
@@ -238,7 +244,7 @@ def test_the_two_low_power_modes_disagree_on_fuel(eng):
 def test_the_idle_floor_never_exceeds_the_lapsed_rating():
     """At extreme altitude the floor is unreachable; delivered power must not lie."""
     thin = 0.05
-    eng = Turboshaft(RATED_KW)
+    eng = Turboshaft(RATED_KW, allow_shutdown=False)
     state = eng.operate(1.0, sigma=thin)
     assert state.at_idle
     assert state.delivered_kw == pytest.approx(eng.max_power_kw(thin))

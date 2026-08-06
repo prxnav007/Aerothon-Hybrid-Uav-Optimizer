@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Literal
 
 from src.control.base import (
     ControlContext,
@@ -17,14 +18,22 @@ __all__ = ["FixedECMS"]
 
 @dataclass(frozen=True)
 class FixedECMS(EMSController):
-    """Return either a fixed absolute factor or a fixed neutral-factor ratio."""
+    """Return either a fixed absolute factor or a reference-factor ratio."""
 
     s: float | None = None
     s_ratio: float | None = None
+    ratio_anchor: Literal["switching", "neutral"] = "switching"
 
     def __post_init__(self) -> None:
         if (self.s is None) == (self.s_ratio is None):
             raise ValueError("exactly one of s and s_ratio must be set")
+        if self.ratio_anchor not in ("switching", "neutral"):
+            raise ValueError(
+                "ratio_anchor must be 'switching' or 'neutral', "
+                f"got {self.ratio_anchor!r}"
+            )
+        if self.s is not None and self.ratio_anchor != "switching":
+            raise ValueError("ratio_anchor applies only when s_ratio is set")
 
         field_name = "s" if self.s is not None else "s_ratio"
         value = float(getattr(self, field_name))
@@ -36,14 +45,15 @@ class FixedECMS(EMSController):
         """Return the configured factor without state-of-charge feedback."""
         if self.s is not None:
             return self.s
-        return float(self.s_ratio) * ctx.neutral_s
+        reference = ctx.neutral_s if self.ratio_anchor == "neutral" else ctx.switching_s
+        return float(self.s_ratio) * reference
 
     @property
     def name(self) -> str:
         """Stable benchmark label including the selected parameter value."""
         if self.s is not None:
             return f"fixed_s={self.s:.2f}"
-        return f"fixed_ratio={self.s_ratio:.2f}"
+        return f"fixed_{self.ratio_anchor}_ratio={self.s_ratio:.2f}"
 
     @classmethod
     def pure_thermal(cls) -> "FixedECMS":
@@ -64,5 +74,10 @@ class FixedECMS(EMSController):
 
     @classmethod
     def at_neutral(cls) -> "FixedECMS":
-        """Track the operating-point neutral factor without SoC feedback."""
+        """Track average-SFC neutral, which is engine-preferring in practice."""
+        return cls(s_ratio=1.0, ratio_anchor="neutral")
+
+    @classmethod
+    def at_switching(cls) -> "FixedECMS":
+        """Track the marginal engine-on charge/discharge boundary."""
         return cls(s_ratio=1.0)

@@ -43,7 +43,7 @@ class LoadDependentSweepResult(SweepResult):
 @pytest.fixture(scope="module")
 def default_components() -> PowerSplitComponents:
     return PowerSplitComponents(
-        engine=Turboshaft(75.0),
+        engine=Turboshaft(75.0, allow_shutdown=False),
         battery=BatteryPack(20.0),
         powertrain=SeriesPowertrain(),
     )
@@ -198,7 +198,7 @@ def test_negligible_ohmic_loss_keeps_every_solution_on_an_endpoint() -> None:
 
 
 def test_numerical_switch_matches_the_marginal_closed_form() -> None:
-    engine = Turboshaft(75.0)
+    engine = Turboshaft(75.0, allow_shutdown=False)
     battery = BatteryPack(100.0, r_ref_ohm=1.0e-6, scale_resistance=False)
     powertrain = SeriesPowertrain()
     expected = switching_equivalence_factor(
@@ -366,7 +366,7 @@ def test_cutoff_soc_leaves_the_engine_responsible_for_all_positive_demand() -> N
 
 
 def test_idle_surplus_respects_and_names_the_charge_limit() -> None:
-    engine = Turboshaft(75.0)
+    engine = Turboshaft(75.0, allow_shutdown=False)
     battery = BatteryPack(5.0)
     powertrain = SeriesPowertrain()
     idle_bus_kw = float(powertrain.bus_power_from_engine(engine.idle_power_kw))

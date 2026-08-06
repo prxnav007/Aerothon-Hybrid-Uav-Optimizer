@@ -1,6 +1,7 @@
 """Tests for the shared energy-management controller interface and contract."""
 
 import dataclasses
+import math
 
 import pytest
 
@@ -22,6 +23,7 @@ def _context(
     bus_demand_kw: float = 40.0,
     max_bus_kw: float = 100.0,
     neutral_s: float = 5.0,
+    switching_s: float = 4.8,
     time_s: float = 60.0,
     phase: str = "loiter",
 ) -> ControlContext:
@@ -30,6 +32,7 @@ def _context(
         bus_demand_kw=bus_demand_kw,
         max_bus_kw=max_bus_kw,
         neutral_s=neutral_s,
+        switching_s=switching_s,
         time_s=time_s,
         phase=phase,
     )
@@ -49,20 +52,20 @@ class ConstantController(EMSController):
 
 class MonotoneLinearController(EMSController):
     def equivalence_factor(self, ctx: ControlContext) -> float:
-        return ctx.neutral_s + 4.0 * (0.5 - ctx.soc)
+        return ctx.switching_s + 4.0 * (0.5 - ctx.soc)
 
     @property
     def name(self) -> str:
         return "monotone-linear-test-controller"
 
 
-class BelowNeutralController(EMSController):
+class BelowSwitchingController(EMSController):
     def equivalence_factor(self, ctx: ControlContext) -> float:
-        return ctx.neutral_s - 1.0 - ctx.soc
+        return ctx.switching_s - 1.0 - ctx.soc
 
     @property
     def name(self) -> str:
-        return "below-neutral-test-controller"
+        return "below-switching-test-controller"
 
 
 def test_neutral_factor_matches_both_specific_fuel_consumption_anchors() -> None:
@@ -154,10 +157,10 @@ def test_contract_rejects_a_non_finite_controller_at_assertion_one() -> None:
         assert_controller_contract(ConstantController(float("nan")))
 
 
-def test_contract_rejects_a_controller_confined_below_neutral_at_assertion_five(
+def test_contract_rejects_a_controller_confined_below_switching_at_assertion_five(
 ) -> None:
     with pytest.raises(AssertionError, match="assertion 5"):
-        assert_controller_contract(BelowNeutralController())
+        assert_controller_contract(BelowSwitchingController())
 
 
 def test_contract_requires_fixed_controller_exceptions_to_be_named() -> None:
@@ -178,6 +181,14 @@ def test_control_context_rejects_state_of_charge_outside_the_unit_interval(soc: 
 def test_control_context_rejects_a_negative_bus_power_normaliser() -> None:
     with pytest.raises(ValueError, match="max_bus_kw"):
         _context(max_bus_kw=-1.0)
+
+
+@pytest.mark.parametrize("switching_s", [0.0, -1.0, math.inf, math.nan])
+def test_control_context_rejects_a_non_physical_switching_factor(
+    switching_s: float,
+) -> None:
+    with pytest.raises(ValueError, match="switching_s"):
+        _context(switching_s=switching_s)
 
 
 @pytest.mark.parametrize(

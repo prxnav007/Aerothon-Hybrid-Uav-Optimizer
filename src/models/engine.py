@@ -89,7 +89,7 @@ class Turboshaft:
     idle_fuel_fraction: float = IDLE_FUEL_FRACTION
     lapse_exponent: float = LAPSE_EXPONENT
     min_power_fraction: float = MIN_POWER_FRACTION
-    allow_shutdown: bool = False
+    allow_shutdown: bool = True
     restart_fuel_kg: float = RESTART_FUEL_KG
 
     def __post_init__(self) -> None:

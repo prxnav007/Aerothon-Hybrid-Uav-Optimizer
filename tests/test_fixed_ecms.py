@@ -25,12 +25,14 @@ def _context(
     soc: float = 0.5,
     demand_kw: float = 40.0,
     neutral_s: float = 5.0,
+    switching_s: float = 4.8,
 ) -> ControlContext:
     return ControlContext(
         soc=soc,
         bus_demand_kw=demand_kw,
         max_bus_kw=100.0,
         neutral_s=neutral_s,
+        switching_s=switching_s,
         time_s=60.0,
         phase="loiter",
     )
@@ -46,14 +48,27 @@ def test_absolute_mode_returns_exactly_s_over_every_context() -> None:
                 ) == 5.25
 
 
-def test_ratio_mode_tracks_neutral_but_not_state_of_charge() -> None:
+def test_ratio_mode_tracks_switching_but_not_state_of_charge() -> None:
     controller = FixedECMS(s_ratio=1.1)
-    low_neutral = controller.equivalence_factor(_context(soc=0.5, neutral_s=4.0))
-    high_neutral = controller.equivalence_factor(_context(soc=0.5, neutral_s=7.0))
-    changed_soc = controller.equivalence_factor(_context(soc=0.9, neutral_s=7.0))
-    assert low_neutral == 1.1 * 4.0
-    assert high_neutral == 1.1 * 7.0
-    assert changed_soc == high_neutral
+    low_switching = controller.equivalence_factor(
+        _context(soc=0.5, switching_s=4.0)
+    )
+    high_switching = controller.equivalence_factor(
+        _context(soc=0.5, switching_s=7.0)
+    )
+    changed_soc = controller.equivalence_factor(
+        _context(soc=0.9, switching_s=7.0)
+    )
+    assert low_switching == 1.1 * 4.0
+    assert high_switching == 1.1 * 7.0
+    assert changed_soc == high_switching
+
+
+def test_switching_ratio_ignores_the_average_cost_neutral_diagnostic() -> None:
+    controller = FixedECMS(s_ratio=1.1)
+    low = controller.equivalence_factor(_context(neutral_s=4.0, switching_s=5.0))
+    high = controller.equivalence_factor(_context(neutral_s=9.0, switching_s=5.0))
+    assert high == low
 
 
 def test_clamped_factor_passes_in_range_and_clamps_out_of_range() -> None:
@@ -97,11 +112,12 @@ def test_assertion_five_also_fails_when_four_alone_is_skipped(
         assert_controller_contract(controller, skip_assertions=(4,))
 
 
-def test_reference_constructors_select_the_contract_rails_and_neutral() -> None:
-    context = _context(neutral_s=7.25)
+def test_reference_constructors_select_the_contract_rails_and_both_references() -> None:
+    context = _context(neutral_s=7.25, switching_s=4.75)
     assert FixedECMS.pure_thermal().equivalence_factor(context) >= S_ABSOLUTE_MAX
     assert FixedECMS.battery_first().equivalence_factor(context) <= S_ABSOLUTE_MIN
     assert FixedECMS.at_neutral().equivalence_factor(context) == context.neutral_s
+    assert FixedECMS.at_switching().equivalence_factor(context) == context.switching_s
 
 
 @pytest.mark.parametrize(
@@ -123,6 +139,11 @@ def test_parameter_must_be_finite_and_positive(field_name: str, value: float) ->
         FixedECMS(**{field_name: value})
 
 
+def test_ratio_anchor_must_name_a_supported_reference() -> None:
+    with pytest.raises(ValueError, match="ratio_anchor"):
+        FixedECMS(s_ratio=1.0, ratio_anchor="average")  # type: ignore[arg-type]
+
+
 def test_name_is_stable_and_encodes_the_parameter() -> None:
     first = FixedECMS(s=4.5)
     identical = FixedECMS(s=4.5)
@@ -130,7 +151,7 @@ def test_name_is_stable_and_encodes_the_parameter() -> None:
     ratio = FixedECMS(s_ratio=1.1)
     assert first.name == identical.name == "fixed_s=4.50"
     assert first.name != different.name
-    assert ratio.name == "fixed_ratio=1.10"
+    assert ratio.name == "fixed_switching_ratio=1.10"
     assert ratio.name != first.name
 
 

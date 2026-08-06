@@ -7,6 +7,7 @@ import pytest
 
 from src.simulation.mission import (
     AltitudeMode,
+    DESCENT_LANDING_FUEL_KG,
     MissionProfile,
     Phase,
     SpeedMode,
@@ -44,6 +45,7 @@ def _profile(phases: tuple[Phase, ...]) -> MissionProfile:
         phases=phases,
         initial_altitude_m=0.0,
         fuel_reserve_kg=5.0,
+        descent_landing_fuel_kg=4.7,
         min_usable_fuel_kg=20.0,
         max_mission_time_s=86400.0,
     )
@@ -66,6 +68,13 @@ def test_factory_defaults_loiter_to_open_ended_minimum_power_flight() -> None:
     assert loiter.termination is Termination.RESOURCE
     assert loiter.speed_mode is SpeedMode.MIN_POWER
     assert loiter.speed_mps is None
+
+
+def test_factory_keeps_reserve_separate_from_descent_and_landing_fuel() -> None:
+    mission = ps1_mission()
+    assert mission.fuel_reserve_kg == 5.0
+    assert mission.descent_landing_fuel_kg == DESCENT_LANDING_FUEL_KG
+    assert mission.loiter_fuel_floor_kg == pytest.approx(9.7, abs=1.0e-12)
 
 
 def test_factory_altitude_chain_is_continuous_from_initial_altitude_to_ground() -> None:
@@ -305,6 +314,7 @@ def test_profile_limits_must_be_finite_and_positive(field_name: str, value: floa
         "phases": ps1_mission().phases,
         "initial_altitude_m": 0.0,
         "fuel_reserve_kg": 5.0,
+        "descent_landing_fuel_kg": 5.4,
         "min_usable_fuel_kg": 20.0,
         "max_mission_time_s": 86400.0,
         field_name: value,
@@ -322,6 +332,7 @@ def test_profile_initial_altitude_m_must_be_finite_and_non_negative(
             phases=ps1_mission().phases,
             initial_altitude_m=initial_altitude_m,
             fuel_reserve_kg=5.0,
+            descent_landing_fuel_kg=5.4,
             min_usable_fuel_kg=20.0,
             max_mission_time_s=86400.0,
         )
@@ -333,6 +344,7 @@ def test_profile_requires_reserve_to_be_below_minimum_usable_fuel() -> None:
             phases=ps1_mission().phases,
             initial_altitude_m=0.0,
             fuel_reserve_kg=20.0,
+            descent_landing_fuel_kg=5.4,
             min_usable_fuel_kg=20.0,
             max_mission_time_s=86400.0,
         )
@@ -363,6 +375,7 @@ def test_every_phase_field_is_immutable(field_name: str, value: object) -> None:
         ("phases", ()),
         ("initial_altitude_m", 1.0),
         ("fuel_reserve_kg", 6.0),
+        ("descent_landing_fuel_kg", 6.0),
         ("min_usable_fuel_kg", 21.0),
         ("max_mission_time_s", 1.0),
     ],
@@ -379,10 +392,24 @@ def test_profile_stores_phases_as_a_tuple_even_when_given_a_list() -> None:
         phases=list(mission.phases),  # type: ignore[arg-type]
         initial_altitude_m=mission.initial_altitude_m,
         fuel_reserve_kg=mission.fuel_reserve_kg,
+        descent_landing_fuel_kg=mission.descent_landing_fuel_kg,
         min_usable_fuel_kg=mission.min_usable_fuel_kg,
         max_mission_time_s=mission.max_mission_time_s,
     )
     assert isinstance(rebuilt.phases, tuple)
+
+
+@pytest.mark.parametrize("value", [-1.0, math.inf, math.nan])
+def test_descent_and_landing_fuel_must_be_finite_and_non_negative(
+    value: float,
+) -> None:
+    with pytest.raises(ValueError, match="descent_landing_fuel_kg"):
+        dataclasses.replace(ps1_mission(), descent_landing_fuel_kg=value)
+
+
+def test_zero_descent_and_landing_fuel_is_supported_for_custom_profiles() -> None:
+    mission = dataclasses.replace(ps1_mission(), descent_landing_fuel_kg=0.0)
+    assert mission.loiter_fuel_floor_kg == mission.fuel_reserve_kg
 
 
 @pytest.mark.parametrize(

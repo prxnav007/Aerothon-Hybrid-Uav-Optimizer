@@ -13,12 +13,15 @@ from enum import Enum
 
 __all__ = [
     "AltitudeMode",
+    "DESCENT_LANDING_FUEL_KG",
     "MissionProfile",
     "Phase",
     "SpeedMode",
     "Termination",
     "ps1_mission",
 ]
+
+DESCENT_LANDING_FUEL_KG = 4.7  # measured with margin; see assumptions.md S-04
 
 
 class SpeedMode(Enum):
@@ -147,6 +150,7 @@ class MissionProfile:
     phases: tuple[Phase, ...]
     initial_altitude_m: float
     fuel_reserve_kg: float
+    descent_landing_fuel_kg: float
     min_usable_fuel_kg: float
     max_mission_time_s: float
 
@@ -173,12 +177,20 @@ class MissionProfile:
             )
         for field_name in (
             "fuel_reserve_kg",
-            "min_usable_fuel_kg",
             "max_mission_time_s",
+            "min_usable_fuel_kg",
         ):
             value = getattr(self, field_name)
             if not _is_finite(value) or value <= 0.0:
                 raise ValueError(f"{field_name} must be finite and positive, got {value!r}")
+        if (
+            not _is_finite(self.descent_landing_fuel_kg)
+            or self.descent_landing_fuel_kg < 0.0
+        ):
+            raise ValueError(
+                "descent_landing_fuel_kg must be finite and non-negative, "
+                f"got {self.descent_landing_fuel_kg!r}"
+            )
         if self.fuel_reserve_kg >= self.min_usable_fuel_kg:
             raise ValueError(
                 "fuel_reserve_kg must be less than min_usable_fuel_kg, "
@@ -247,6 +259,11 @@ class MissionProfile:
         )
 
     @property
+    def loiter_fuel_floor_kg(self) -> float:
+        """Fuel retained at loiter exit for the remaining mission and reserve."""
+        return self.descent_landing_fuel_kg + self.fuel_reserve_kg
+
+    @property
     def phase_names(self) -> tuple[str, ...]:
         """Phase names in mission order."""
         return tuple(phase.name for phase in self.phases)
@@ -276,6 +293,7 @@ def ps1_mission(
     cruise_duration_s: float = 3600.0,
     landing_duration_s: float = 120.0,
     fuel_reserve_kg: float = 5.0,
+    descent_landing_fuel_kg: float = DESCENT_LANDING_FUEL_KG,
     min_usable_fuel_kg: float = 20.0,
     max_mission_time_s: float = 24.0 * 3600.0,
 ) -> MissionProfile:
@@ -345,6 +363,7 @@ def ps1_mission(
         phases=phases,
         initial_altitude_m=initial_altitude_m,
         fuel_reserve_kg=fuel_reserve_kg,
+        descent_landing_fuel_kg=descent_landing_fuel_kg,
         min_usable_fuel_kg=min_usable_fuel_kg,
         max_mission_time_s=max_mission_time_s,
     )

@@ -14,7 +14,11 @@ from dataclasses import asdict, dataclass, fields
 from typing import TYPE_CHECKING, Any
 
 from src.control.base import ControlContext, EMSController, neutral_equivalence_factor
-from src.control.power_split import SplitDecision, solve_split
+from src.control.power_split import (
+    SplitDecision,
+    solve_split,
+    switching_equivalence_factor,
+)
 from src.models import aerodynamics
 from src.models.atmosphere import atmosphere, g0
 from src.models.battery import BatteryPack, SOC_EPS
@@ -92,11 +96,14 @@ class TimeStep:
     shaft_power_kw: float
     bus_demand_kw: float
     neutral_s: float
+    switching_s: float
     equivalence_factor: float
     engine_shaft_kw: float
     engine_load_fraction: float
     sfc_kg_kwh: float
     fuel_flow_kg_s: float
+    restart_fuel_kg: float
+    engine_shut_down: bool
     battery_bus_kw: float
     soc: float
     fuel_remaining_kg: float
@@ -143,6 +150,7 @@ class _Dispatch:
     shaft_power_kw: float
     bus_demand_kw: float
     neutral_s: float
+    switching_s: float
     equivalence_factor: float
     max_bus_kw: float
     split: SplitDecision
@@ -189,12 +197,12 @@ def _source_efficiency_at(aircraft: Aircraft, engine_shaft_kw: float) -> float:
     return min(efficiency, 1.0)
 
 
-def _neutral_factor(
+def _equivalence_references(
     aircraft: Aircraft,
     bus_demand_kw: float,
     sigma: float,
-) -> float:
-    """Neutral factor at a pre-dispatch, engine-only reference point.
+) -> tuple[float, float]:
+    """Return average-cost neutral and marginal switching references.
 
     Actual engine SFC is split-dependent and therefore cannot be an input to
     the controller that selects the factor used to obtain that split.  The
@@ -206,11 +214,14 @@ def _neutral_factor(
     reference_kw = min(max(required_kw, aircraft.engine.idle_power_kw), engine_max_kw)
     reference_kw = max(reference_kw, _STATE_EPS)
     sfc = float(aircraft.engine.sfc_kg_kwh(reference_kw))
-    return neutral_equivalence_factor(
-        sfc,
-        _source_efficiency_at(aircraft, reference_kw),
+    source_efficiency = _source_efficiency_at(aircraft, reference_kw)
+    neutral_s = neutral_equivalence_factor(sfc, source_efficiency, LHV_KJ_KG)
+    switching_s = switching_equivalence_factor(
+        aircraft.engine.willans_a,
+        source_efficiency,
         LHV_KJ_KG,
     )
+    return neutral_s, switching_s
 
 
 def _dispatch(
@@ -245,7 +256,9 @@ def _dispatch(
     )
     shaft_power_kw = float(aerodynamic.shaft_power_w) / 1000.0
     bus_demand_kw = float(aircraft.powertrain.bus_power_required(shaft_power_kw))
-    neutral_s = _neutral_factor(aircraft, bus_demand_kw, atmospheric.density_ratio)
+    neutral_s, switching_s = _equivalence_references(
+        aircraft, bus_demand_kw, atmospheric.density_ratio
+    )
     max_bus_kw = float(
         aircraft.powertrain.bus_power_from_engine(
             aircraft.engine.max_power_kw(atmospheric.density_ratio)
@@ -256,6 +269,7 @@ def _dispatch(
         bus_demand_kw=bus_demand_kw,
         max_bus_kw=max_bus_kw,
         neutral_s=neutral_s,
+        switching_s=switching_s,
         time_s=time_s,
         phase=phase.name,
     )
@@ -277,6 +291,7 @@ def _dispatch(
         shaft_power_kw=shaft_power_kw,
         bus_demand_kw=bus_demand_kw,
         neutral_s=neutral_s,
+        switching_s=switching_s,
         equivalence_factor=factor,
         max_bus_kw=max_bus_kw,
         split=split,
@@ -360,6 +375,7 @@ def run_mission(
     resource_reason: str | None = None
     terminal_failure = False
     all_phases_completed = True
+    engine_was_shut_down = False
 
     if initial_fuel_kg <= 0.0:
         _append_flag(flags, seen_flags, "fuel_exhausted")
@@ -382,8 +398,10 @@ def run_mission(
                     altitude_m = float(phase.target_altitude_m)
                     break
             else:
-                if fuel_remaining_kg <= mission.fuel_reserve_kg + _STATE_EPS:
-                    fuel_remaining_kg = max(fuel_remaining_kg, mission.fuel_reserve_kg)
+                if fuel_remaining_kg <= mission.loiter_fuel_floor_kg + _STATE_EPS:
+                    fuel_remaining_kg = max(
+                        fuel_remaining_kg, mission.loiter_fuel_floor_kg
+                    )
                     resource_reason = "fuel_reserve"
                     break
                 if soc <= aircraft.battery.soc_min + SOC_EPS:
@@ -481,6 +499,8 @@ def run_mission(
             # therefore the selected engine power.
             dispatch: _Dispatch | None = None
             engine_state: EngineState | None = None
+            restart_fuel_kg = 0.0
+            fuel_boundary_prevents_step = False
             for _ in range(6):
                 dispatch = _dispatch(
                     aircraft,
@@ -500,21 +520,41 @@ def run_mission(
                     dispatch.split.engine_shaft_kw,
                     dispatch.atmospheric.density_ratio,
                 )
+                restart_fuel_kg = (
+                    aircraft.engine.restart_fuel_kg
+                    if engine_was_shut_down and not engine_state.shut_down
+                    else 0.0
+                )
                 fuel_floor_kg = (
-                    mission.fuel_reserve_kg
+                    mission.loiter_fuel_floor_kg
                     if phase.termination is Termination.RESOURCE
                     else 0.0
                 )
                 expendable_kg = max(fuel_remaining_kg - fuel_floor_kg, 0.0)
-                burn_kg = engine_state.fuel_flow_kg_s * step_dt_s
+                burn_kg = engine_state.fuel_flow_kg_s * step_dt_s + restart_fuel_kg
                 if burn_kg <= expendable_kg + _STATE_EPS or burn_kg <= 0.0:
                     break
-                shortened_dt_s = step_dt_s * expendable_kg / burn_kg
+                fuel_for_operation_kg = expendable_kg - restart_fuel_kg
+                if fuel_for_operation_kg <= _STATE_EPS:
+                    fuel_boundary_prevents_step = True
+                    break
+                shortened_dt_s = fuel_for_operation_kg / engine_state.fuel_flow_kg_s
                 if shortened_dt_s <= _STATE_EPS:
+                    fuel_boundary_prevents_step = True
                     break
                 step_dt_s = shortened_dt_s
 
             assert dispatch is not None
+            if fuel_boundary_prevents_step:
+                if phase.termination is Termination.RESOURCE:
+                    resource_reason = "fuel_reserve"
+                else:
+                    fuel_remaining_kg = 0.0
+                    _append_flag(flags, seen_flags, "fuel_exhausted")
+                    termination_reason = "fuel_exhausted"
+                    terminal_failure = True
+                    all_phases_completed = False
+                break
             if not dispatch.split.feasible:
                 _append_flag(flags, seen_flags, "power_shortfall")
                 termination_reason = "power_shortfall"
@@ -567,14 +607,17 @@ def run_mission(
             if battery_state.energy_limited and battery_flow_is_material:
                 _append_flag(flags, seen_flags, "battery_energy_limited")
 
-            fuel_burned_kg = engine_state.fuel_flow_kg_s * step_dt_s
+            fuel_burned_kg = (
+                engine_state.fuel_flow_kg_s * step_dt_s + restart_fuel_kg
+            )
             fuel_remaining_kg -= fuel_burned_kg
             if (
                 phase.termination is Termination.RESOURCE
-                and abs(fuel_remaining_kg - mission.fuel_reserve_kg) <= _STATE_EPS
+                and abs(fuel_remaining_kg - mission.loiter_fuel_floor_kg) <= _STATE_EPS
             ):
-                fuel_remaining_kg = mission.fuel_reserve_kg
+                fuel_remaining_kg = mission.loiter_fuel_floor_kg
             soc = battery_state.soc
+            engine_was_shut_down = engine_state.shut_down
             altitude_m += climb_rate_mps * step_dt_s
             if phase.termination is Termination.ALTITUDE:
                 if (
@@ -592,7 +635,9 @@ def run_mission(
             peak_bus_kw = max(peak_bus_kw, dispatch.bus_demand_kw)
             peak_engine_kw = max(peak_engine_kw, engine_state.delivered_kw)
 
-            fuel_chemical_kw = engine_state.fuel_flow_kg_s * LHV_KJ_KG
+            fuel_chemical_kw = (
+                engine_state.fuel_flow_kg_s + restart_fuel_kg / step_dt_s
+            ) * LHV_KJ_KG
             propulsive_kw = max(float(dispatch.aerodynamic.thrust_power_w), 0.0) / 1000.0
             system_efficiency = aircraft.powertrain.system_efficiency(
                 propulsive_kw,
@@ -636,11 +681,14 @@ def run_mission(
                         shaft_power_kw=dispatch.shaft_power_kw,
                         bus_demand_kw=dispatch.bus_demand_kw,
                         neutral_s=dispatch.neutral_s,
+                        switching_s=dispatch.switching_s,
                         equivalence_factor=dispatch.equivalence_factor,
                         engine_shaft_kw=engine_state.delivered_kw,
                         engine_load_fraction=engine_state.load_fraction,
                         sfc_kg_kwh=engine_state.sfc_kg_kwh,
                         fuel_flow_kg_s=engine_state.fuel_flow_kg_s,
+                        restart_fuel_kg=restart_fuel_kg,
+                        engine_shut_down=engine_state.shut_down,
                         battery_bus_kw=battery_state.power_kw,
                         soc=soc,
                         fuel_remaining_kg=fuel_remaining_kg,
@@ -671,7 +719,13 @@ def run_mission(
             break
 
     if all_phases_completed and not terminal_failure:
-        termination_reason = resource_reason or "mission_complete"
+        if fuel_remaining_kg < mission.fuel_reserve_kg - _STATE_EPS:
+            _append_flag(flags, seen_flags, "fuel_reserve_shortfall")
+            termination_reason = "fuel_reserve_shortfall"
+            terminal_failure = True
+            all_phases_completed = False
+        else:
+            termination_reason = resource_reason or "mission_complete"
 
     mean_efficiency = (
         efficiency_time_integral / integrated_time_s if integrated_time_s > 0.0 else 0.0

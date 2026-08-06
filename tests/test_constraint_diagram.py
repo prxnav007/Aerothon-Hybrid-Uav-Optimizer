@@ -337,6 +337,27 @@ def test_report_reference_selection_and_60kw_cleanliness_threshold(
     assert "60 kW CD0 threshold" in capsys.readouterr().out
 
 
+def test_band_interpretation_omits_the_imposed_ceiling_and_recovers_fuel() -> None:
+    grid = np.linspace(150.0, 1800.0, 6601)
+    curves = constraint_curves(
+        grid, design_cases()[:2], AIRFRAME, POWERTRAIN, LAPSE_EXPONENT
+    )
+    point = feasible_design_point(curves, stall_limit())
+    peak_bus_kw = float(POWERTRAIN.bus_power_from_engine(point.engine_power_sl_kw)) + 30.0
+    masses = build_mass_budget(
+        engine_kw=point.engine_power_sl_kw,
+        battery_kwh=10.0,
+        peak_bus_kw=peak_bus_kw,
+        wing_area_m2=point.wing_area_m2,
+        aspect_ratio=AIRFRAME.aspect_ratio,
+    )
+    assert point.binding_constraint == "cruise_3km"
+    assert point.wing_area_m2 == pytest.approx(7.59175537062125)
+    assert point.engine_power_sl_kw == pytest.approx(86.7791369750147)
+    assert masses.dry_kg == pytest.approx(711.3898016890586)
+    assert masses.fuel_kg == pytest.approx(288.6101983109414)
+
+
 def test_models_and_result_are_immutable() -> None:
     with pytest.raises(FrozenInstanceError):
         AIRFRAME.cd0 = 0.02  # type: ignore[misc]

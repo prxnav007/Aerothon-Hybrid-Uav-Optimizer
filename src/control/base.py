@@ -88,6 +88,7 @@ class ControlContext:
     bus_demand_kw: float
     max_bus_kw: float
     neutral_s: float
+    switching_s: float
     time_s: float
     phase: str
 
@@ -96,6 +97,7 @@ class ControlContext:
         bus_demand = _require_finite("bus_demand_kw", self.bus_demand_kw)
         max_bus = _require_finite("max_bus_kw", self.max_bus_kw)
         neutral = _require_finite("neutral_s", self.neutral_s)
+        switching = _require_finite("switching_s", self.switching_s)
         time = _require_finite("time_s", self.time_s)
 
         if not 0.0 <= soc <= 1.0:
@@ -104,6 +106,8 @@ class ControlContext:
             raise ValueError(f"max_bus_kw must be non-negative, got {self.max_bus_kw!r}")
         if neutral <= 0.0:
             raise ValueError(f"neutral_s must be positive, got {self.neutral_s!r}")
+        if switching <= 0.0:
+            raise ValueError(f"switching_s must be positive, got {self.switching_s!r}")
         if time < 0.0:
             raise ValueError(f"time_s must be non-negative, got {self.time_s!r}")
 
@@ -111,6 +115,7 @@ class ControlContext:
         object.__setattr__(self, "bus_demand_kw", bus_demand)
         object.__setattr__(self, "max_bus_kw", max_bus)
         object.__setattr__(self, "neutral_s", neutral)
+        object.__setattr__(self, "switching_s", switching)
         object.__setattr__(self, "time_s", time)
 
     @property
@@ -171,6 +176,7 @@ def assert_controller_contract(
 
     soc_grid = tuple(index / 10.0 for index in range(11))
     demand_grid = tuple(index / 10.0 for index in range(11))
+    switching_reference = 5.0
 
     # Assertions 3–5 guard the flat-controller failure in AGENTS.md known traps.
     for demand in demand_grid:
@@ -180,7 +186,8 @@ def assert_controller_contract(
                 soc=soc,
                 bus_demand_kw=demand,
                 max_bus_kw=1.0,
-                neutral_s=5.0,
+                neutral_s=8.0,
+                switching_s=switching_reference,
                 time_s=0.0,
                 phase="contract",
             )
@@ -208,11 +215,13 @@ def assert_controller_contract(
             )
 
         if 5 not in skipped:
-            straddles = any(value < 5.0 - tolerance for value in outputs) and any(
-                value > 5.0 + tolerance for value in outputs
+            straddles = any(
+                value < switching_reference - tolerance for value in outputs
+            ) and any(
+                value > switching_reference + tolerance for value in outputs
             )
             if not straddles:
                 _contract_failure(
                     5,
-                    f"output does not straddle neutral_s at demand {demand:.1f}",
+                    f"output does not straddle switching_s at demand {demand:.1f}",
                 )
