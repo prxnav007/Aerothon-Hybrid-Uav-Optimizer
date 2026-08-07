@@ -1,14 +1,15 @@
-"""Conditional finite-horizon loiter dynamic programming."""
+"""Conditional finite-horizon loiter DP with explicit primal and dual bounds."""
 
 from __future__ import annotations
 
+import csv
+import hashlib
+import json
 import math
 import time
-import csv
-import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Sequence
 
 import numpy as np
 
@@ -17,18 +18,23 @@ from src.models.atmosphere import atmosphere
 from src.simulation.simulator import Aircraft, TimeStep
 
 __all__ = [
-    "FiniteHorizonDPBracket",
+    "FiniteHorizonDPBounds",
     "FiniteHorizonDPProblem",
     "FiniteHorizonDPResult",
+    "clear_transition_kernel_cache",
     "plot_finite_horizon_policy",
+    "run_finite_horizon_scenarios",
     "solve_finite_horizon_dp",
     "write_finite_horizon_dp_csv",
 ]
 
+_POWER_TOLERANCE_KW = 1.0e-7
+_KERNEL_CACHE: dict[str, "_TransitionKernel"] = {}
+
 
 @dataclass(frozen=True)
 class FiniteHorizonDPProblem:
-    """Exogenous loiter trajectory and independently refinable DP grids."""
+    """Exogenous conditional-loiter trajectory and discrete policy grids."""
 
     steps: tuple[TimeStep, ...]
     aircraft: Aircraft
@@ -41,19 +47,21 @@ class FiniteHorizonDPProblem:
     action_grid_points: int
     initial_engine_on: bool = True
     initial_remaining_dwell_s: float = 0.0
+    dwell_semantics: str = "hard"
+    max_backward_inductions: int = 32
+    scenario_name: str = "unnamed"
 
     def __post_init__(self) -> None:
         if not self.steps:
             raise ValueError("steps must not be empty")
         nominal = self.steps[0].dt_s
-        if any(
-            abs(step.dt_s - nominal) > 1.0e-10
-            for step in self.steps[:-1]
-        ) or not 0.0 < self.steps[-1].dt_s <= nominal + 1.0e-10:
+        if any(abs(step.dt_s - nominal) > 1.0e-10 for step in self.steps[:-1]):
             raise ValueError("only the final replay interval may be shorter")
+        if not 0.0 < self.steps[-1].dt_s <= nominal + 1.0e-10:
+            raise ValueError("final replay interval must be positive and no longer than nominal")
         if not self.aircraft.engine.allow_shutdown:
             raise ValueError("finite-horizon DP requires genuine engine shutdown")
-        if not self.aircraft.battery.battery_mode.value == "legacy":
+        if self.aircraft.battery.battery_mode.value != "legacy":
             raise ValueError("primary finite-horizon DP uses the verified legacy battery")
         if not self.aircraft.battery.soc_min <= self.initial_soc <= 1.0:
             raise ValueError("initial_soc lies outside the battery bounds")
@@ -65,6 +73,10 @@ class FiniteHorizonDPProblem:
             raise ValueError("initial remaining dwell must be non-negative")
         if self.soc_grid_points < 11 or self.action_grid_points < 3:
             raise ValueError("DP grids are too small")
+        if self.dwell_semantics != "hard":
+            raise ValueError("finite-horizon DP currently supports hard dwell only")
+        if self.max_backward_inductions < 4:
+            raise ValueError("max_backward_inductions must be at least four")
         start = float(self.aircraft.battery.stored_energy_kwh(self.initial_soc))
         target = start + self.target_energy_change_kwh
         lower = float(
@@ -81,7 +93,7 @@ class FiniteHorizonDPProblem:
 
 @dataclass(frozen=True)
 class FiniteHorizonDPResult:
-    """One grid-terminal DP policy replayed through the battery model."""
+    """One discrete DP policy and its fixed-action continuous replay."""
 
     fuel_consumed_kg: float
     average_fuel_rate_kg_h: float
@@ -89,16 +101,21 @@ class FiniteHorizonDPResult:
     restart_fuel_kg: float
     initial_soc: float
     terminal_soc: float
+    discrete_terminal_soc: float
     minimum_soc: float
     maximum_soc: float
     endpoint_energy_change_kwh: float
+    discrete_endpoint_energy_change_kwh: float
     integrated_energy_change_kwh: float
+    ledger_residual_kwh: float
     target_energy_change_kwh: float
-    requested_target_energy_change_kwh: float
-    target_residual_kwh: float
-    terminal_shadow_price_kg_kwh: float
+    terminal_target_residual_kwh: float
+    discrete_terminal_target_residual_kwh: float
+    terminal_shadow_price_kg_kwh: float | None
+    lagrangian_value_kg: float | None
     engine_off_fraction: float
     restart_count: int
+    dwell_violation_count: int
     on_durations_s: tuple[float, ...]
     off_durations_s: tuple[float, ...]
     engine_on_power_mean_kw: float
@@ -107,79 +124,325 @@ class FiniteHorizonDPResult:
     battery_ohmic_loss_kwh: float
     constraint_encounters: tuple[ConstraintEncounter, ...]
     soc_trajectory: tuple[float, ...]
+    discrete_soc_trajectory: tuple[float, ...]
     engine_power_trajectory_kw: tuple[float, ...]
     depletion_before_final_tenth_fraction: float
+    continuous_constraints_satisfied: bool
+    continuous_constraint_violations: tuple[str, ...]
+    policy_hash: str
+    kernel_build_runtime_s: float
+    policy_solve_runtime_s: float
     runtime_s: float
     policy_memory_bytes: int
     problem: FiniteHorizonDPProblem
 
 
 @dataclass(frozen=True)
-class FiniteHorizonDPBracket:
-    """Policies ending at the adjacent grid energies around one target."""
+class FiniteHorizonDPBounds:
+    """Supported endpoint policies and valid bounds for the discrete DP model."""
 
-    lower_energy_result: FiniteHorizonDPResult
-    upper_energy_result: FiniteHorizonDPResult
+    lower_energy_policy: FiniteHorizonDPResult
+    upper_energy_policy: FiniteHorizonDPResult
+    feasible_upper_bound_policy: FiniteHorizonDPResult | None
     target_energy_change_kwh: float
-    target_grid_width_kwh: float
-    endpoint_bracketed: bool
-
-    @property
-    def fuel_interval_kg(self) -> tuple[float, float]:
-        values = (
-            self.lower_energy_result.fuel_consumed_kg,
-            self.upper_energy_result.fuel_consumed_kg,
-        )
-        return min(values), max(values)
-
-    @property
-    def endpoint_energy_interval_kwh(self) -> tuple[float, float]:
-        values = (
-            self.lower_energy_result.endpoint_energy_change_kwh,
-            self.upper_energy_result.endpoint_energy_change_kwh,
-        )
-        return min(values), max(values)
+    endpoint_energy_interval_kwh: tuple[float, float]
+    endpoint_energy_interval_width_kwh: float
+    policy_fuel_values_kg: tuple[float, float]
+    endpoint_target_bracketed: bool
+    dual_lower_bound_kg: float
+    feasible_upper_bound_kg: float | None
+    optimality_gap_kg: float | None
+    bound_scope: str
+    effective_soc_grid_points: int
+    backward_inductions: int
+    termination_reason: str
+    kernel_cache_hit: bool
+    kernel_build_runtime_s: float
+    policy_solve_runtime_s: float
 
 
 @dataclass(frozen=True)
 class _TransitionKernel:
     soc_grid: np.ndarray
     energy_grid: np.ndarray
+    initial_soc_index: int
+    target_soc_index: int
     action_power_kw: np.ndarray
     next_soc: np.ndarray
+    next_soc_index: np.ndarray
     feasible: np.ndarray
     fuel_kg: np.ndarray
-    internal_change_kwh: np.ndarray
     battery_power_kw: np.ndarray
-    ohmic_loss_kwh: np.ndarray
     max_dwell_steps: int
     on_dwell_steps: int
     off_dwell_steps: int
     build_runtime_s: float
     memory_bytes: int
+    cache_key: str
+
+
+@dataclass(frozen=True)
+class _DiscretePolicy:
+    action_indices: tuple[int, ...]
+    soc_indices: tuple[int, ...]
+    engine_states: tuple[bool, ...]
+    engine_fuel_kg: float
+    restart_count: int
+    restart_fuel_kg: float
+    policy_hash: str
+    policy_memory_bytes: int
+
+
+def _soc_for_energy(aircraft: Aircraft, target_kwh: float) -> float:
+    battery = aircraft.battery
+    lower = battery.soc_min
+    upper = 1.0
+    for _ in range(60):
+        middle = 0.5 * (lower + upper)
+        if float(battery.stored_energy_kwh(middle)) < target_kwh:
+            lower = middle
+        else:
+            upper = middle
+    return 0.5 * (lower + upper)
+
+
+def _anchored_soc_grid(problem: FiniteHorizonDPProblem) -> np.ndarray:
+    battery = problem.aircraft.battery
+    start_energy = float(battery.stored_energy_kwh(problem.initial_soc))
+    target_soc = _soc_for_energy(
+        problem.aircraft, start_energy + problem.target_energy_change_kwh
+    )
+    base = np.linspace(battery.soc_min, 1.0, problem.soc_grid_points)
+    return np.unique(np.concatenate((base, (problem.initial_soc, target_soc))))
+
+
+def _kernel_key(problem: FiniteHorizonDPProblem) -> str:
+    step_data = tuple(
+        (step.dt_s, step.altitude_m, step.bus_demand_kw) for step in problem.steps
+    )
+    payload = repr(
+        (
+            step_data,
+            problem.aircraft.engine,
+            problem.aircraft.battery,
+            problem.aircraft.powertrain,
+            problem.initial_soc,
+            problem.target_energy_change_kwh,
+            problem.minimum_on_time_s,
+            problem.minimum_off_time_s,
+            problem.soc_grid_points,
+            problem.action_grid_points,
+        )
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def clear_transition_kernel_cache() -> None:
+    """Drop the in-process scenario kernel cache."""
+    _KERNEL_CACHE.clear()
+
+
+def _build_kernel(problem: FiniteHorizonDPProblem) -> _TransitionKernel:
+    started = time.perf_counter()
+    battery = problem.aircraft.battery
+    engine = problem.aircraft.engine
+    powertrain = problem.aircraft.powertrain
+    soc_grid = _anchored_soc_grid(problem)
+    energy_grid = np.asarray(battery.stored_energy_kwh(soc_grid), dtype=float)
+    initial_index = int(np.argmin(abs(soc_grid - problem.initial_soc)))
+    target_energy = energy_grid[initial_index] + problem.target_energy_change_kwh
+    target_index = int(np.argmin(abs(energy_grid - target_energy)))
+    action_count = problem.action_grid_points
+    shape = (len(problem.steps), action_count, len(soc_grid))
+    action_power = np.zeros((len(problem.steps), action_count), dtype=float)
+    next_soc = np.empty(shape, dtype=np.float64)
+    next_index = np.full(shape, -1, dtype=np.int32)
+    feasible = np.zeros(shape, dtype=bool)
+    fuel = np.zeros((len(problem.steps), action_count), dtype=float)
+    battery_power = np.zeros((len(problem.steps), action_count), dtype=float)
+
+    for time_index, step in enumerate(problem.steps):
+        sigma = float(atmosphere(step.altitude_m).density_ratio)
+        maximum = engine.max_power_kw(sigma)
+        on_actions = np.linspace(engine.idle_power_kw, maximum, action_count - 1)
+        if action_count >= 5:
+            load_following = float(powertrain.engine_power_for_bus(step.bus_demand_kw))
+            charge_boundary = float(
+                powertrain.engine_power_for_bus(
+                    step.bus_demand_kw
+                    + battery.available_charge_kw(problem.initial_soc, step.dt_s)
+                )
+            )
+            on_actions[-3] = min(max(load_following, engine.idle_power_kw), maximum)
+            on_actions[-2] = min(max(charge_boundary, engine.idle_power_kw), maximum)
+            on_actions.sort()
+        action_power[time_index, 1:] = on_actions
+        for action_index, command in enumerate(action_power[time_index]):
+            engine_state = engine.operate(float(command), sigma)
+            actual = 0.0 if action_index == 0 else engine_state.delivered_kw
+            bus = step.bus_demand_kw - float(powertrain.bus_power_from_engine(actual))
+            battery_power[time_index, action_index] = bus
+            fuel[time_index, action_index] = engine_state.fuel_flow_kg_s * step.dt_s
+            for soc_index, soc in enumerate(soc_grid):
+                state = battery.step(float(soc), bus, step.dt_s)
+                reproduced = abs(state.power_kw - bus) <= _POWER_TOLERANCE_KW
+                feasible[time_index, action_index, soc_index] = reproduced
+                next_soc[time_index, action_index, soc_index] = state.soc
+                if reproduced:
+                    next_index[time_index, action_index, soc_index] = int(
+                        np.argmin(abs(soc_grid - state.soc))
+                    )
+
+    on_dwell = math.ceil(problem.minimum_on_time_s / problem.timestep_s)
+    off_dwell = math.ceil(problem.minimum_off_time_s / problem.timestep_s)
+    arrays = action_power, next_soc, next_index, feasible, fuel, battery_power
+    return _TransitionKernel(
+        soc_grid=soc_grid,
+        energy_grid=energy_grid,
+        initial_soc_index=initial_index,
+        target_soc_index=target_index,
+        action_power_kw=action_power,
+        next_soc=next_soc,
+        next_soc_index=next_index,
+        feasible=feasible,
+        fuel_kg=fuel,
+        battery_power_kw=battery_power,
+        max_dwell_steps=max(on_dwell, off_dwell, 1),
+        on_dwell_steps=on_dwell,
+        off_dwell_steps=off_dwell,
+        build_runtime_s=time.perf_counter() - started,
+        memory_bytes=sum(array.nbytes for array in arrays),
+        cache_key=_kernel_key(problem),
+    )
+
+
+def _get_kernel(problem: FiniteHorizonDPProblem) -> tuple[_TransitionKernel, bool]:
+    key = _kernel_key(problem)
+    if key in _KERNEL_CACHE:
+        return _KERNEL_CACHE[key], True
+    kernel = _build_kernel(problem)
+    _KERNEL_CACHE[key] = kernel
+    return kernel, False
+
+
+def _backward_policy(
+    problem: FiniteHorizonDPProblem,
+    kernel: _TransitionKernel,
+    terminal_cost: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, float]:
+    started = time.perf_counter()
+    state_count = kernel.max_dwell_steps + 1
+    soc_count = len(kernel.soc_grid)
+    action_count = problem.action_grid_points
+    value = np.broadcast_to(terminal_cost, (2, state_count, soc_count)).copy()
+    policy = np.zeros((len(problem.steps), 2, state_count, soc_count), dtype=np.uint16)
+    for time_index in range(len(problem.steps) - 1, -1, -1):
+        next_value = value
+        value = np.full_like(next_value, np.inf)
+        for current_on in (0, 1):
+            for remaining in range(state_count):
+                candidates = np.full((action_count, soc_count), np.inf)
+                for action_index in range(action_count):
+                    next_on = int(action_index > 0)
+                    if next_on == current_on:
+                        next_remaining = max(remaining - 1, 0)
+                    elif remaining == 0:
+                        dwell = (
+                            kernel.on_dwell_steps if next_on else kernel.off_dwell_steps
+                        )
+                        next_remaining = max(dwell - 1, 0)
+                    else:
+                        continue
+                    valid = kernel.feasible[time_index, action_index]
+                    if not np.any(valid):
+                        continue
+                    soc_indices = np.flatnonzero(valid)
+                    successors = kernel.next_soc_index[
+                        time_index, action_index, soc_indices
+                    ]
+                    restart = (
+                        problem.restart_fuel_kg if not current_on and next_on else 0.0
+                    )
+                    candidates[action_index, soc_indices] = (
+                        kernel.fuel_kg[time_index, action_index]
+                        + restart
+                        + next_value[next_on, next_remaining, successors]
+                    )
+                policy[time_index, current_on, remaining] = np.argmin(candidates, axis=0)
+                value[current_on, remaining] = np.min(candidates, axis=0)
+    return policy, value, time.perf_counter() - started
+
+
+def _extract_policy(
+    problem: FiniteHorizonDPProblem,
+    kernel: _TransitionKernel,
+    policy: np.ndarray,
+) -> _DiscretePolicy:
+    soc_index = kernel.initial_soc_index
+    current_on = int(problem.initial_engine_on)
+    remaining = min(
+        math.ceil(problem.initial_remaining_dwell_s / problem.timestep_s),
+        kernel.max_dwell_steps,
+    )
+    actions: list[int] = []
+    states: list[bool] = []
+    soc_indices = [soc_index]
+    engine_fuel = 0.0
+    restart_count = 0
+    for time_index in range(len(problem.steps)):
+        action_index = int(policy[time_index, current_on, remaining, soc_index])
+        next_on = int(action_index > 0)
+        if next_on != current_on and remaining > 0:
+            raise RuntimeError("DP policy violates hard dwell")
+        if not kernel.feasible[time_index, action_index, soc_index]:
+            raise RuntimeError("DP policy selected an infeasible grid transition")
+        if next_on == current_on:
+            remaining = max(remaining - 1, 0)
+        else:
+            dwell = kernel.on_dwell_steps if next_on else kernel.off_dwell_steps
+            remaining = max(dwell - 1, 0)
+        restarted = int(not current_on and next_on)
+        restart_count += restarted
+        engine_fuel += kernel.fuel_kg[time_index, action_index]
+        soc_index = int(kernel.next_soc_index[time_index, action_index, soc_index])
+        current_on = next_on
+        actions.append(action_index)
+        states.append(bool(current_on))
+        soc_indices.append(soc_index)
+    payload = bytes(np.asarray(actions, dtype=np.uint16))
+    return _DiscretePolicy(
+        action_indices=tuple(actions),
+        soc_indices=tuple(soc_indices),
+        engine_states=tuple(states),
+        engine_fuel_kg=engine_fuel,
+        restart_count=restart_count,
+        restart_fuel_kg=restart_count * problem.restart_fuel_kg,
+        policy_hash=hashlib.sha256(payload).hexdigest()[:16],
+        policy_memory_bytes=policy.nbytes,
+    )
 
 
 def _dwell_runs(
-    states: Sequence[bool], timestep_s: float, initial_engine_on: bool
+    states: Sequence[bool], steps: Sequence[TimeStep], initial_on: bool
 ) -> tuple[tuple[float, ...], tuple[float, ...]]:
     on: list[float] = []
     off: list[float] = []
-    current = initial_engine_on
+    current = initial_on
     elapsed = 0.0
-    for state in states:
+    for state, step in zip(states, steps):
         if state != current:
             if elapsed > 0.0:
                 (on if current else off).append(elapsed)
             current = state
             elapsed = 0.0
-        elapsed += timestep_s
+        elapsed += step.dt_s
     if elapsed > 0.0:
         (on if current else off).append(elapsed)
     return tuple(on), tuple(off)
 
 
 def _encounters(
-    observed: dict[tuple[str, str], list[tuple[float, float, float]]],
+    observed: dict[tuple[str, str], list[tuple[float, float, float]]]
 ) -> tuple[ConstraintEncounter, ...]:
     return tuple(
         ConstraintEncounter(
@@ -196,276 +459,111 @@ def _encounters(
     )
 
 
-def _build_kernel(problem: FiniteHorizonDPProblem) -> _TransitionKernel:
-    started = time.perf_counter()
-    steps = problem.steps
-    battery = problem.aircraft.battery
-    engine = problem.aircraft.engine
-    powertrain = problem.aircraft.powertrain
-    timestep_s = problem.timestep_s
-    soc_grid = np.linspace(battery.soc_min, 1.0, problem.soc_grid_points)
-    energy_grid = np.asarray(battery.stored_energy_kwh(soc_grid), dtype=float)
-    action_count = problem.action_grid_points
-    shape = (len(steps), action_count, problem.soc_grid_points)
-    action_power = np.zeros((len(steps), action_count), dtype=float)
-    next_soc = np.empty(shape, dtype=np.float64)
-    feasible = np.zeros(shape, dtype=bool)
-    fuel = np.zeros((len(steps), action_count), dtype=float)
-    internal = np.zeros(shape, dtype=np.float64)
-    battery_power = np.zeros((len(steps), action_count), dtype=float)
-    ohmic = np.zeros(shape, dtype=np.float64)
-
-    for time_index, step in enumerate(steps):
-        step_h = step.dt_s / 3600.0
-        sigma = float(atmosphere(step.altitude_m).density_ratio)
-        maximum = engine.max_power_kw(sigma)
-        on_actions = np.linspace(engine.idle_power_kw, maximum, action_count - 1)
-        if action_count >= 5:
-            load_following = float(
-                powertrain.engine_power_for_bus(step.bus_demand_kw)
-            )
-            charge_boundary = float(
-                powertrain.engine_power_for_bus(
-                    step.bus_demand_kw + battery.available_charge_kw(problem.initial_soc)
-                )
-            )
-            on_actions[-3] = min(max(load_following, engine.idle_power_kw), maximum)
-            on_actions[-2] = min(max(charge_boundary, engine.idle_power_kw), maximum)
-            on_actions.sort()
-        action_power[time_index, 1:] = on_actions
-        for action_index, command in enumerate(action_power[time_index]):
-            engine_state = engine.operate(float(command), sigma)
-            actual_power = 0.0 if action_index == 0 else engine_state.delivered_kw
-            bus_from_engine = float(powertrain.bus_power_from_engine(actual_power))
-            requested_battery = step.bus_demand_kw - bus_from_engine
-            battery_power[time_index, action_index] = requested_battery
-            fuel[time_index, action_index] = engine_state.fuel_flow_kg_s * step.dt_s
-            for soc_index, soc in enumerate(soc_grid):
-                state = battery.step(float(soc), requested_battery, step.dt_s)
-                reproduced = abs(state.power_kw - requested_battery) <= 1.0e-7
-                feasible[time_index, action_index, soc_index] = reproduced
-                next_soc[time_index, action_index, soc_index] = state.soc
-                internal_kw = state.open_circuit_voltage_v * state.current_a / 1000.0
-                internal[time_index, action_index, soc_index] = -internal_kw * step_h
-                ohmic[time_index, action_index, soc_index] = state.ohmic_loss_kw * step_h
-
-    on_dwell = math.ceil(problem.minimum_on_time_s / timestep_s)
-    off_dwell = math.ceil(problem.minimum_off_time_s / timestep_s)
-    maximum_dwell = max(on_dwell, off_dwell, 1)
-    arrays = (
-        action_power,
-        next_soc,
-        feasible,
-        fuel,
-        internal,
-        battery_power,
-        ohmic,
-    )
-    return _TransitionKernel(
-        soc_grid=soc_grid,
-        energy_grid=energy_grid,
-        action_power_kw=action_power,
-        next_soc=next_soc,
-        feasible=feasible,
-        fuel_kg=fuel,
-        internal_change_kwh=internal,
-        battery_power_kw=battery_power,
-        ohmic_loss_kwh=ohmic,
-        max_dwell_steps=maximum_dwell,
-        on_dwell_steps=on_dwell,
-        off_dwell_steps=off_dwell,
-        build_runtime_s=time.perf_counter() - started,
-        memory_bytes=sum(array.nbytes for array in arrays),
-    )
-
-
-def _solve_shadow_price(
+def _replay_policy(
     problem: FiniteHorizonDPProblem,
     kernel: _TransitionKernel,
-    terminal_shadow_price_kg_kwh: float,
+    discrete: _DiscretePolicy,
+    *,
+    shadow_price: float | None,
+    solve_runtime_s: float,
+    kernel_build_runtime_s: float,
 ) -> FiniteHorizonDPResult:
     started = time.perf_counter()
-    state_count = kernel.max_dwell_steps + 1
-    soc_count = problem.soc_grid_points
-    action_count = problem.action_grid_points
-    step_count = len(problem.steps)
-    terminal_cost = terminal_shadow_price_kg_kwh * kernel.energy_grid
-    value = np.broadcast_to(
-        terminal_cost, (2, state_count, soc_count)
-    ).copy()
-    policy = np.zeros(
-        (step_count, 2, state_count, soc_count), dtype=np.uint16
-    )
-
-    for time_index in range(step_count - 1, -1, -1):
-        next_value = value
-        value = np.full_like(next_value, np.inf)
-        for current_on in (0, 1):
-            for remaining in range(state_count):
-                candidates = np.full((action_count, soc_count), np.inf)
-                off_feasible = kernel.feasible[time_index, 0]
-                for action_index in range(action_count):
-                    next_on = int(action_index > 0)
-                    if next_on == current_on:
-                        next_remaining = max(remaining - 1, 0)
-                        allowed = np.ones(soc_count, dtype=bool)
-                    elif current_on:
-                        next_remaining = max(kernel.off_dwell_steps - 1, 0)
-                        allowed = np.full(soc_count, remaining == 0)
-                    else:
-                        next_remaining = max(kernel.on_dwell_steps - 1, 0)
-                        allowed = np.full(soc_count, remaining == 0) | ~off_feasible
-                    valid = allowed & kernel.feasible[time_index, action_index]
-                    if not np.any(valid):
-                        continue
-                    restart = (
-                        problem.restart_fuel_kg
-                        if not current_on and next_on
-                        else 0.0
-                    )
-                    candidates[action_index, valid] = (
-                        kernel.fuel_kg[time_index, action_index]
-                        + restart
-                        + np.interp(
-                            kernel.next_soc[time_index, action_index, valid],
-                            kernel.soc_grid,
-                            next_value[next_on, next_remaining],
-                        )
-                    )
-                policy[time_index, current_on, remaining] = np.argmin(
-                    candidates, axis=0
-                )
-                value[current_on, remaining] = np.min(candidates, axis=0)
-
-    initial_index = int(np.argmin(abs(kernel.soc_grid - problem.initial_soc)))
-    initial_remaining = min(
-        math.ceil(problem.initial_remaining_dwell_s / problem.timestep_s),
-        kernel.max_dwell_steps,
-    )
-    initial_on = int(problem.initial_engine_on)
-    if not math.isfinite(value[initial_on, initial_remaining, initial_index]):
-        raise RuntimeError("terminal grid state is unreachable from the initial state")
-
     battery = problem.aircraft.battery
     engine = problem.aircraft.engine
     powertrain = problem.aircraft.powertrain
     soc = problem.initial_soc
-    current_on = initial_on
-    remaining = initial_remaining
-    engine_fuel = 0.0
-    restart_fuel = 0.0
-    internal_change = 0.0
-    charge = 0.0
-    discharge = 0.0
-    ohmic = 0.0
-    restart_count = 0
-    states: list[bool] = []
+    internal_change = charge = discharge = ohmic = 0.0
     soc_path = [soc]
-    power_path: list[float] = []
+    powers: list[float] = []
     energy_changes: list[float] = []
+    feasible = True
+    violations: list[str] = []
     observed: dict[tuple[str, str], list[tuple[float, float, float]]] = {}
-
-    for time_index, step in enumerate(problem.steps):
-        soc_index = int(np.argmin(abs(kernel.soc_grid - soc)))
+    for time_index, (step, action_index) in enumerate(
+        zip(problem.steps, discrete.action_indices)
+    ):
+        pre_soc = soc
         sigma = float(atmosphere(step.altitude_m).density_ratio)
-        selected = int(policy[time_index, current_on, remaining, soc_index])
-        off_bus = step.bus_demand_kw
-        off_state = battery.step(soc, off_bus, step.dt_s)
-        off_feasible = abs(off_state.power_kw - off_bus) <= 1.0e-6
-        chosen = None
-        for action_index in sorted(
-            range(problem.action_grid_points), key=lambda index: abs(index - selected)
-        ):
-            next_on = int(action_index > 0)
-            if next_on != current_on and remaining > 0:
-                safety_restart = not current_on and next_on and not off_feasible
-                if not safety_restart:
-                    continue
-            power = float(kernel.action_power_kw[time_index, action_index])
-            candidate_engine = engine.operate(power, sigma)
-            candidate_bus = step.bus_demand_kw - float(
-                powertrain.bus_power_from_engine(candidate_engine.delivered_kw)
-            )
-            candidate_battery = battery.step(soc, candidate_bus, step.dt_s)
-            if abs(candidate_battery.power_kw - candidate_bus) <= 1.0e-6:
-                chosen = (
-                    action_index,
-                    next_on,
-                    candidate_engine,
-                    candidate_bus,
-                    candidate_battery,
-                )
-                break
-        if chosen is None:
-            raise RuntimeError("DP policy has no continuously feasible action")
-        action_index, next_on, engine_state, bus, battery_state = chosen
+        command = float(kernel.action_power_kw[time_index, action_index])
+        engine_state = engine.operate(command, sigma)
+        actual = 0.0 if action_index == 0 else engine_state.delivered_kw
+        bus = step.bus_demand_kw - float(powertrain.bus_power_from_engine(actual))
+        battery_state = battery.step(soc, bus, step.dt_s)
+        reproduced = abs(battery_state.power_kw - bus) <= _POWER_TOLERANCE_KW
+        feasible = feasible and reproduced
+        if not reproduced:
+            violations.append(f"battery_power_limit@step_{time_index}")
+        if engine_state.power_limited:
+            feasible = False
+            violations.append(f"engine_power_limit@step_{time_index}")
         scale_h = step.dt_s / 3600.0
-        engine_fuel += engine_state.fuel_flow_kg_s * step.dt_s
-        if not current_on and next_on:
-            restart_count += 1
-            restart_fuel += problem.restart_fuel_kg
-        internal_kw = (
-            battery_state.open_circuit_voltage_v * battery_state.current_a / 1000.0
-        )
-        change = float(battery.stored_energy_kwh(battery_state.soc)) - float(
-            battery.stored_energy_kwh(soc)
-        )
-        energy_changes.append(change)
+        internal_kw = battery_state.open_circuit_voltage_v * battery_state.current_a / 1000.0
         internal_change -= internal_kw * scale_h
         charge += max(-battery_state.power_kw, 0.0) * scale_h
         discharge += max(battery_state.power_kw, 0.0) * scale_h
         ohmic += battery_state.ohmic_loss_kw * scale_h
+        change = float(battery.stored_energy_kwh(battery_state.soc)) - float(
+            battery.stored_energy_kwh(soc)
+        )
+        energy_changes.append(change)
         if battery_state.active_limit != "none" and abs(bus) > 1.0e-10:
             direction = "charge" if bus < 0.0 else "discharge"
             for limit in battery_state.active_limit.split("_and_"):
                 observed.setdefault((direction, limit), []).append(
-                    (step.time_s, soc, abs(bus))
+                    (step.time_s, pre_soc, abs(bus))
                 )
-        if next_on == current_on:
-            remaining = max(remaining - 1, 0)
-        elif current_on:
-            remaining = max(kernel.off_dwell_steps - 1, 0)
-        else:
-            remaining = max(kernel.on_dwell_steps - 1, 0)
-        current_on = next_on
         soc = battery_state.soc
-        states.append(bool(current_on))
-        power_path.append(engine_state.delivered_kw)
         soc_path.append(soc)
+        powers.append(actual)
 
     start_energy = float(battery.stored_energy_kwh(problem.initial_soc))
     endpoint = float(battery.stored_energy_kwh(soc)) - start_energy
-    total_fuel = engine_fuel + restart_fuel
-    on_durations, off_durations = _dwell_runs(
-        states, problem.timestep_s, problem.initial_engine_on
+    discrete_start = kernel.energy_grid[discrete.soc_indices[0]]
+    discrete_endpoint = kernel.energy_grid[discrete.soc_indices[-1]] - discrete_start
+    total_fuel = discrete.engine_fuel_kg + discrete.restart_fuel_kg
+    target = problem.target_energy_change_kwh
+    lagrangian = (
+        total_fuel + shadow_price * (discrete_endpoint - target)
+        if shadow_price is not None
+        else None
     )
-    discharge_magnitudes = np.maximum(-np.asarray(energy_changes), 0.0)
-    final_tenth_start = math.floor(0.9 * len(discharge_magnitudes))
-    total_depletion = float(np.sum(discharge_magnitudes))
-    early_fraction = (
-        float(np.sum(discharge_magnitudes[:final_tenth_start])) / total_depletion
+    on_durations, off_durations = _dwell_runs(
+        discrete.engine_states, problem.steps, problem.initial_engine_on
+    )
+    depletion = np.maximum(-np.asarray(energy_changes), 0.0)
+    split = math.floor(0.9 * len(depletion))
+    total_depletion = float(np.sum(depletion))
+    early = (
+        float(np.sum(depletion[:split])) / total_depletion
         if total_depletion > 0.0
         else 0.0
     )
     duration_h = sum(step.dt_s for step in problem.steps) / 3600.0
-    on_powers = [power for power in power_path if power > 0.0]
+    on_powers = [power for power in powers if power > 0.0]
+    replay_runtime = time.perf_counter() - started
     return FiniteHorizonDPResult(
         fuel_consumed_kg=total_fuel,
         average_fuel_rate_kg_h=total_fuel / duration_h,
-        engine_fuel_kg=engine_fuel,
-        restart_fuel_kg=restart_fuel,
+        engine_fuel_kg=discrete.engine_fuel_kg,
+        restart_fuel_kg=discrete.restart_fuel_kg,
         initial_soc=problem.initial_soc,
         terminal_soc=soc,
+        discrete_terminal_soc=float(kernel.soc_grid[discrete.soc_indices[-1]]),
         minimum_soc=min(soc_path),
         maximum_soc=max(soc_path),
         endpoint_energy_change_kwh=endpoint,
+        discrete_endpoint_energy_change_kwh=float(discrete_endpoint),
         integrated_energy_change_kwh=internal_change,
-        target_energy_change_kwh=problem.target_energy_change_kwh,
-        requested_target_energy_change_kwh=problem.target_energy_change_kwh,
-        target_residual_kwh=endpoint - problem.target_energy_change_kwh,
-        terminal_shadow_price_kg_kwh=terminal_shadow_price_kg_kwh,
-        engine_off_fraction=states.count(False) / len(states),
-        restart_count=restart_count,
+        ledger_residual_kwh=endpoint - internal_change,
+        target_energy_change_kwh=target,
+        terminal_target_residual_kwh=endpoint - target,
+        discrete_terminal_target_residual_kwh=float(discrete_endpoint - target),
+        terminal_shadow_price_kg_kwh=shadow_price,
+        lagrangian_value_kg=lagrangian,
+        engine_off_fraction=discrete.engine_states.count(False) / len(discrete.engine_states),
+        restart_count=discrete.restart_count,
+        dwell_violation_count=0,
         on_durations_s=on_durations,
         off_durations_s=off_durations,
         engine_on_power_mean_kw=float(np.mean(on_powers)) if on_powers else 0.0,
@@ -474,25 +572,116 @@ def _solve_shadow_price(
         battery_ohmic_loss_kwh=ohmic,
         constraint_encounters=_encounters(observed),
         soc_trajectory=tuple(soc_path),
-        engine_power_trajectory_kw=tuple(power_path),
-        depletion_before_final_tenth_fraction=early_fraction,
-        runtime_s=time.perf_counter() - started + kernel.build_runtime_s,
-        policy_memory_bytes=policy.nbytes + kernel.memory_bytes,
+        discrete_soc_trajectory=tuple(
+            float(kernel.soc_grid[index]) for index in discrete.soc_indices
+        ),
+        engine_power_trajectory_kw=tuple(powers),
+        depletion_before_final_tenth_fraction=early,
+        continuous_constraints_satisfied=feasible,
+        continuous_constraint_violations=tuple(violations),
+        policy_hash=discrete.policy_hash,
+        kernel_build_runtime_s=kernel_build_runtime_s,
+        policy_solve_runtime_s=solve_runtime_s,
+        runtime_s=kernel_build_runtime_s + solve_runtime_s + replay_runtime,
+        policy_memory_bytes=discrete.policy_memory_bytes + kernel.memory_bytes,
         problem=problem,
     )
 
 
+def _solve_terminal_cost(
+    problem: FiniteHorizonDPProblem,
+    kernel: _TransitionKernel,
+    terminal_cost: np.ndarray,
+    *,
+    shadow_price: float | None,
+    kernel_build_runtime_s: float,
+) -> FiniteHorizonDPResult:
+    policy, value, solve_runtime = _backward_policy(problem, kernel, terminal_cost)
+    initial_remaining = min(
+        math.ceil(problem.initial_remaining_dwell_s / problem.timestep_s),
+        kernel.max_dwell_steps,
+    )
+    initial_value = value[
+        int(problem.initial_engine_on), initial_remaining, kernel.initial_soc_index
+    ]
+    if not math.isfinite(float(initial_value)):
+        raise RuntimeError("terminal DP state is unreachable from the initial state")
+    discrete = _extract_policy(problem, kernel, policy)
+    return _replay_policy(
+        problem,
+        kernel,
+        discrete,
+        shadow_price=shadow_price,
+        solve_runtime_s=solve_runtime,
+        kernel_build_runtime_s=kernel_build_runtime_s,
+    )
+
+
+def _solve_shadow_price(
+    problem: FiniteHorizonDPProblem,
+    kernel: _TransitionKernel,
+    shadow_price: float,
+    kernel_build_runtime_s: float = 0.0,
+) -> FiniteHorizonDPResult:
+    target_absolute = (
+        kernel.energy_grid[kernel.initial_soc_index] + problem.target_energy_change_kwh
+    )
+    terminal_cost = shadow_price * (kernel.energy_grid - target_absolute)
+    return _solve_terminal_cost(
+        problem,
+        kernel,
+        terminal_cost,
+        shadow_price=shadow_price,
+        kernel_build_runtime_s=kernel_build_runtime_s,
+    )
+
+
+def _solve_exact_discrete_target(
+    problem: FiniteHorizonDPProblem,
+    kernel: _TransitionKernel,
+) -> FiniteHorizonDPResult | None:
+    terminal_cost = np.full(len(kernel.soc_grid), np.inf)
+    terminal_cost[kernel.target_soc_index] = 0.0
+    try:
+        return _solve_terminal_cost(
+            problem,
+            kernel,
+            terminal_cost,
+            shadow_price=None,
+            kernel_build_runtime_s=0.0,
+        )
+    except RuntimeError:
+        return None
+
+
 def solve_finite_horizon_dp(
     problem: FiniteHorizonDPProblem,
-) -> FiniteHorizonDPBracket:
-    """Bracket the endpoint with adjacent terminal shadow-price policies."""
-    kernel = _build_kernel(problem)
-    cache: dict[float, FiniteHorizonDPResult] = {}
+    *,
+    progress: Callable[[str], None] | None = print,
+) -> FiniteHorizonDPBounds:
+    """Maximise a valid discrete-model dual and construct an exact grid target."""
+    started = time.perf_counter()
+    kernel, cache_hit = _get_kernel(problem)
+    build_runtime = 0.0 if cache_hit else kernel.build_runtime_s
+    results: dict[float, FiniteHorizonDPResult] = {}
+    inductions = 0
 
     def solve(shadow: float) -> FiniteHorizonDPResult:
-        if shadow not in cache:
-            cache[shadow] = _solve_shadow_price(problem, kernel, shadow)
-        return cache[shadow]
+        nonlocal inductions
+        key = float(shadow)
+        if key in results:
+            return results[key]
+        if inductions >= problem.max_backward_inductions:
+            raise RuntimeError("maximum backward inductions reached")
+        inductions += 1
+        if progress is not None:
+            progress(
+                f"scenario={problem.scenario_name} grid={len(kernel.soc_grid)}x"
+                f"{problem.action_grid_points} multiplier_iteration={inductions} "
+                f"lambda={key:.9g} elapsed_s={time.perf_counter() - started:.2f}"
+            )
+        results[key] = _solve_shadow_price(problem, kernel, key)
+        return results[key]
 
     target = problem.target_energy_change_kwh
     scale = problem.aircraft.engine.willans_a / max(
@@ -502,97 +691,153 @@ def solve_finite_horizon_dp(
     upper_shadow = scale
     upper_energy = solve(lower_shadow)
     lower_energy = solve(upper_shadow)
-    for _ in range(24):
-        if (
-            lower_energy.endpoint_energy_change_kwh
-            <= target
-            <= upper_energy.endpoint_energy_change_kwh
-        ):
-            break
-        if lower_energy.endpoint_energy_change_kwh > target:
+    while not (
+        lower_energy.discrete_endpoint_energy_change_kwh
+        <= target
+        <= upper_energy.discrete_endpoint_energy_change_kwh
+    ):
+        if inductions >= problem.max_backward_inductions - 1:
+            raise RuntimeError("requested terminal energy is outside the searched DP range")
+        if lower_energy.discrete_endpoint_energy_change_kwh > target:
             upper_shadow *= 2.0
             lower_energy = solve(upper_shadow)
         else:
             lower_shadow *= 2.0
             upper_energy = solve(lower_shadow)
-    else:
-        raise RuntimeError("requested terminal energy is outside the reachable DP range")
 
-    for _ in range(24):
+    termination = "maximum_backward_inductions"
+    while inductions < problem.max_backward_inductions - 1:
+        if lower_energy.policy_hash == upper_energy.policy_hash:
+            termination = "identical_supported_policy"
+            break
         middle_shadow = 0.5 * (lower_shadow + upper_shadow)
         middle = solve(middle_shadow)
-        if middle.endpoint_energy_change_kwh > target:
+        previous_pair = (lower_energy.policy_hash, upper_energy.policy_hash)
+        if middle.discrete_endpoint_energy_change_kwh > target:
             lower_shadow, upper_energy = middle_shadow, middle
         else:
             upper_shadow, lower_energy = middle_shadow, middle
-        if (
-            lower_energy.endpoint_energy_change_kwh
-            == upper_energy.endpoint_energy_change_kwh
-        ):
+        current_pair = (lower_energy.policy_hash, upper_energy.policy_hash)
+        if current_pair == previous_pair:
+            termination = "repeated_adjacent_policy_pair"
             break
-    endpoint_values = (
-        lower_energy.endpoint_energy_change_kwh,
-        upper_energy.endpoint_energy_change_kwh,
+        if abs(lower_energy.discrete_terminal_target_residual_kwh) <= 1.0e-12:
+            upper_energy = lower_energy
+            termination = "exact_shadow_supported_target"
+            break
+        if abs(upper_energy.discrete_terminal_target_residual_kwh) <= 1.0e-12:
+            lower_energy = upper_energy
+            termination = "exact_shadow_supported_target"
+            break
+
+    upper_bound = _solve_exact_discrete_target(problem, kernel)
+    if upper_bound is not None:
+        inductions += 1
+    dual = max(
+        float(result.lagrangian_value_kg)
+        for result in results.values()
+        if result.lagrangian_value_kg is not None
     )
-    bracketed = min(endpoint_values) <= problem.target_energy_change_kwh <= max(
-        endpoint_values
+    upper_value = upper_bound.fuel_consumed_kg if upper_bound is not None else None
+    endpoints = (
+        lower_energy.discrete_endpoint_energy_change_kwh,
+        upper_energy.discrete_endpoint_energy_change_kwh,
     )
-    return FiniteHorizonDPBracket(
-        lower_energy_result=lower_energy,
-        upper_energy_result=upper_energy,
-        target_energy_change_kwh=problem.target_energy_change_kwh,
-        target_grid_width_kwh=abs(endpoint_values[1] - endpoint_values[0]),
-        endpoint_bracketed=bracketed,
+    if progress is not None:
+        progress(
+            f"scenario={problem.scenario_name} complete inductions={inductions} "
+            f"termination={termination} elapsed_s={time.perf_counter() - started:.2f}"
+        )
+    return FiniteHorizonDPBounds(
+        lower_energy_policy=lower_energy,
+        upper_energy_policy=upper_energy,
+        feasible_upper_bound_policy=upper_bound,
+        target_energy_change_kwh=target,
+        endpoint_energy_interval_kwh=(min(endpoints), max(endpoints)),
+        endpoint_energy_interval_width_kwh=abs(endpoints[1] - endpoints[0]),
+        policy_fuel_values_kg=(
+            lower_energy.fuel_consumed_kg,
+            upper_energy.fuel_consumed_kg,
+        ),
+        endpoint_target_bracketed=min(endpoints) <= target <= max(endpoints),
+        dual_lower_bound_kg=dual,
+        feasible_upper_bound_kg=upper_value,
+        optimality_gap_kg=upper_value - dual if upper_value is not None else None,
+        bound_scope=(
+            "discrete SoC/action DP with nearest-grid transitions; continuous replay "
+            "is diagnostic and is not covered by these bounds"
+        ),
+        effective_soc_grid_points=len(kernel.soc_grid),
+        backward_inductions=inductions,
+        termination_reason=termination,
+        kernel_cache_hit=cache_hit,
+        kernel_build_runtime_s=build_runtime,
+        policy_solve_runtime_s=sum(
+            result.policy_solve_runtime_s for result in results.values()
+        )
+        + (upper_bound.policy_solve_runtime_s if upper_bound is not None else 0.0),
     )
 
 
-def write_finite_horizon_dp_csv(
-    rows: Sequence[tuple[str, FiniteHorizonDPBracket]], output_path: str | Path
-) -> Path:
-    """Write both endpoint edges for each explicitly labelled DP scenario."""
-    records = []
-    for scenario, bracket in rows:
-        for edge, result in (
-            ("lower_energy", bracket.lower_energy_result),
-            ("upper_energy", bracket.upper_energy_result),
-        ):
+def _csv_records(
+    rows: Sequence[tuple[str, FiniteHorizonDPBounds]],
+) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
+    for scenario, bounds in rows:
+        policies = (
+            ("lower_energy_policy", bounds.lower_energy_policy),
+            ("upper_energy_policy", bounds.upper_energy_policy),
+        )
+        if bounds.feasible_upper_bound_policy is not None:
+            policies += (("feasible_upper_bound_policy", bounds.feasible_upper_bound_policy),)
+        for role, result in policies:
             records.append(
                 {
                     "scenario": scenario,
-                    "edge": edge,
+                    "policy_role": role,
+                    "status": "exploratory_discretised_conditional_loiter",
                     "timestep_s": result.problem.timestep_s,
-                    "soc_grid_points": result.problem.soc_grid_points,
+                    "requested_soc_grid_points": result.problem.soc_grid_points,
+                    "effective_soc_grid_points": bounds.effective_soc_grid_points,
                     "action_grid_points": result.problem.action_grid_points,
+                    "dwell_semantics": result.problem.dwell_semantics,
                     "minimum_on_time_s": result.problem.minimum_on_time_s,
                     "minimum_off_time_s": result.problem.minimum_off_time_s,
                     "restart_fuel_per_start_kg": result.problem.restart_fuel_kg,
-                    "target_energy_change_kwh": bracket.target_energy_change_kwh,
-                    "endpoint_energy_change_kwh": result.endpoint_energy_change_kwh,
-                    "integrated_energy_change_kwh": result.integrated_energy_change_kwh,
-                    "endpoint_bracket_width_kwh": bracket.target_grid_width_kwh,
-                    "endpoint_bracketed": bracket.endpoint_bracketed,
+                    "target_energy_change_kwh": bounds.target_energy_change_kwh,
+                    "continuous_endpoint_energy_change_kwh": result.endpoint_energy_change_kwh,
+                    "discrete_endpoint_energy_change_kwh": result.discrete_endpoint_energy_change_kwh,
+                    "ledger_residual_kwh": result.ledger_residual_kwh,
+                    "terminal_target_residual_kwh": result.terminal_target_residual_kwh,
+                    "discrete_terminal_target_residual_kwh": result.discrete_terminal_target_residual_kwh,
+                    "endpoint_energy_interval_width_kwh": bounds.endpoint_energy_interval_width_kwh,
+                    "endpoint_target_bracketed": bounds.endpoint_target_bracketed,
+                    "policy_fuel_kg": result.fuel_consumed_kg,
+                    "dual_lower_bound_kg": bounds.dual_lower_bound_kg,
+                    "feasible_upper_bound_kg": bounds.feasible_upper_bound_kg,
+                    "optimality_gap_kg": bounds.optimality_gap_kg,
+                    "terminal_shadow_price_kg_kwh": result.terminal_shadow_price_kg_kwh,
+                    "lagrangian_value_kg": result.lagrangian_value_kg,
+                    "policy_hash": result.policy_hash,
+                    "continuous_constraints_satisfied": (
+                        result.continuous_constraints_satisfied
+                    ),
+                    "continuous_constraint_violations": json.dumps(
+                        result.continuous_constraint_violations
+                    ),
                     "fuel_consumed_kg": result.fuel_consumed_kg,
-                    "average_fuel_rate_kg_h": result.average_fuel_rate_kg_h,
-                    "engine_fuel_kg": result.engine_fuel_kg,
-                    "restart_fuel_kg": result.restart_fuel_kg,
                     "restart_count": result.restart_count,
+                    "dwell_violation_count": result.dwell_violation_count,
                     "engine_off_fraction": result.engine_off_fraction,
                     "engine_on_power_mean_kw": result.engine_on_power_mean_kw,
                     "initial_soc": result.initial_soc,
                     "terminal_soc": result.terminal_soc,
-                    "minimum_soc": result.minimum_soc,
-                    "maximum_soc": result.maximum_soc,
-                    "battery_charge_kwh": result.battery_charge_kwh,
-                    "battery_discharge_kwh": result.battery_discharge_kwh,
-                    "battery_ohmic_loss_kwh": result.battery_ohmic_loss_kwh,
-                    "depletion_before_final_tenth_fraction": (
-                        result.depletion_before_final_tenth_fraction
-                    ),
-                    "terminal_shadow_price_kg_kwh": (
-                        result.terminal_shadow_price_kg_kwh
-                    ),
-                    "runtime_s": result.runtime_s,
-                    "policy_memory_bytes": result.policy_memory_bytes,
+                    "discrete_terminal_soc": result.discrete_terminal_soc,
+                    "kernel_build_runtime_s": bounds.kernel_build_runtime_s,
+                    "policy_solve_runtime_s": bounds.policy_solve_runtime_s,
+                    "backward_inductions": bounds.backward_inductions,
+                    "termination_reason": bounds.termination_reason,
+                    "kernel_cache_hit": bounds.kernel_cache_hit,
                     "on_durations_s": json.dumps(result.on_durations_s),
                     "off_durations_s": json.dumps(result.off_durations_s),
                     "constraint_encounters": json.dumps(
@@ -600,12 +845,21 @@ def write_finite_horizon_dp_csv(
                         sort_keys=True,
                     ),
                     "soc_trajectory": json.dumps(result.soc_trajectory),
+                    "discrete_soc_trajectory": json.dumps(result.discrete_soc_trajectory),
                     "engine_power_trajectory_kw": json.dumps(
                         result.engine_power_trajectory_kw
                     ),
-                    "scope": "finite-horizon optimum conditional on exogenous trajectory",
+                    "bound_scope": bounds.bound_scope,
                 }
             )
+    return records
+
+
+def write_finite_horizon_dp_csv(
+    rows: Sequence[tuple[str, FiniteHorizonDPBounds]], output_path: str | Path
+) -> Path:
+    """Write supported policies and valid discrete-model bounds."""
+    records = _csv_records(rows)
     if not records:
         raise ValueError("rows must not be empty")
     path = Path(output_path)
@@ -617,30 +871,70 @@ def write_finite_horizon_dp_csv(
     return path
 
 
+def run_finite_horizon_scenarios(
+    scenarios: Sequence[tuple[str, FiniteHorizonDPProblem]],
+    output_path: str | Path,
+    *,
+    resume: bool = True,
+    progress: Callable[[str], None] | None = print,
+) -> tuple[tuple[str, FiniteHorizonDPBounds], ...]:
+    """Solve scenarios with an immediate append-only CSV checkpoint."""
+    path = Path(output_path)
+    completed: set[str] = set()
+    if resume and path.exists():
+        with path.open(newline="", encoding="utf-8") as stream:
+            completed = {row["scenario"] for row in csv.DictReader(stream)}
+    solved: list[tuple[str, FiniteHorizonDPBounds]] = []
+    for scenario, problem in scenarios:
+        if scenario in completed:
+            if progress is not None:
+                progress(f"scenario={scenario} resume=skipped")
+            continue
+        named = problem if problem.scenario_name == scenario else dataclass_replace(
+            problem, scenario_name=scenario
+        )
+        bounds = solve_finite_horizon_dp(named, progress=progress)
+        records = _csv_records(((scenario, bounds),))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_header = not path.exists() or path.stat().st_size == 0
+        with path.open("a", newline="", encoding="utf-8") as stream:
+            writer = csv.DictWriter(stream, fieldnames=tuple(records[0]))
+            if write_header:
+                writer.writeheader()
+            writer.writerows(records)
+            stream.flush()
+        solved.append((scenario, bounds))
+    return tuple(solved)
+
+
+def dataclass_replace(problem: FiniteHorizonDPProblem, **changes: object) -> FiniteHorizonDPProblem:
+    """Local typed replacement without exposing mutable scenario state."""
+    values = {field: getattr(problem, field) for field in problem.__dataclass_fields__}
+    values.update(changes)
+    return FiniteHorizonDPProblem(**values)
+
+
 def plot_finite_horizon_policy(
-    bracket: FiniteHorizonDPBracket, output_path: str | Path
+    bounds: FiniteHorizonDPBounds, output_path: str | Path
 ) -> Path:
-    """Plot the two endpoint-bracketing SoC and engine-power policies."""
+    """Plot the two unequal-energy supported policies without implying fuel bounds."""
     import matplotlib.pyplot as plt
 
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     figure, axes = plt.subplots(2, 1, figsize=(8.0, 5.5), sharex=True)
     for label, result in (
-        ("lower endpoint", bracket.lower_energy_result),
-        ("upper endpoint", bracket.upper_energy_result),
+        ("lower-energy policy", bounds.lower_energy_policy),
+        ("upper-energy policy", bounds.upper_energy_policy),
     ):
         time_h = np.arange(len(result.soc_trajectory)) * result.problem.timestep_s / 3600.0
         axes[0].plot(time_h, result.soc_trajectory, label=label)
         axes[1].step(
-            time_h[:-1],
-            result.engine_power_trajectory_kw,
-            where="post",
-            label=label,
+            time_h[:-1], result.engine_power_trajectory_kw, where="post", label=label
         )
     axes[0].set_ylabel("SoC [-]")
     axes[1].set_ylabel("Engine shaft power [kW]")
-    axes[1].set_xlabel("Post-crossing time [h]")
+    axes[1].set_xlabel("Conditional loiter time [h]")
     axes[0].legend()
     axes[0].grid(alpha=0.25)
     axes[1].grid(alpha=0.25)

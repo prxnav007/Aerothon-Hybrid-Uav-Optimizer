@@ -77,13 +77,14 @@ class PeriodicDPProblem:
 
 @dataclass(frozen=True)
 class PeriodicDPResult:
-    """Periodic DP policy metrics and its matched analytical reference."""
+    """Exploratory grid DP plus valid relaxed/exact-periodic bounds."""
 
     average_fuel_kg_h: float
     total_fuel_kg: float
     mean_engine_power_kw: float
     engine_off_fraction: float
-    terminal_energy_error_kwh: float
+    ledger_residual_kwh: float
+    terminal_target_residual_kwh: float
     terminal_energy_tolerance_kwh: float
     engine_on_power_mean_kw: float
     actions_kw: tuple[float, ...]
@@ -93,6 +94,11 @@ class PeriodicDPResult:
     duty_error: float
     runtime_s: float
     policy_memory_bytes: int
+    exact_periodic_actions_kw: tuple[float, ...]
+    analytical_lower_bound_kg: float
+    feasible_upper_bound_kg: float
+    optimality_gap_kg: float
+    validation_status: str
     problem: PeriodicDPProblem
 
 
@@ -104,6 +110,35 @@ def _energy_rate_kw(problem: PeriodicDPProblem, engine_kw: float) -> float:
     if difference >= 0.0:
         return problem.eta_charge * difference
     return difference / problem.eta_discharge
+
+
+def _exact_periodic_policy(
+    problem: PeriodicDPProblem, analytical: CycleOptimum
+) -> tuple[tuple[float, ...], float, float]:
+    """Repair integer ON/OFF counts with one continuous feasible ON power."""
+    step_count = round(problem.horizon_s / problem.timestep_s)
+    step_h = problem.timestep_s / 3600.0
+    lower = problem.demand_bus_kw / problem.source_efficiency
+    candidates = []
+    for on_count in range(1, step_count + 1):
+        off_count = step_count - on_count
+        required_bus = problem.demand_bus_kw + (
+            off_count
+            * problem.demand_bus_kw
+            / (on_count * problem.eta_charge * problem.eta_discharge)
+        )
+        on_power = required_bus / problem.source_efficiency
+        if lower - 1.0e-12 <= on_power <= analytical.upper_bound_kw + 1.0e-12:
+            fuel = on_count * (
+                problem.willans_a_kg_kwh * on_power + problem.willans_b_kg_h
+            ) * step_h
+            actions = (on_power,) * on_count + (0.0,) * off_count
+            residual = sum(_energy_rate_kw(problem, action) * step_h for action in actions)
+            candidates.append((fuel, abs(residual), actions, residual))
+    if not candidates:
+        raise RuntimeError("no exactly periodic integer-step policy is feasible")
+    fuel, _, actions, residual = min(candidates)
+    return tuple(actions), fuel, residual
 
 
 def solve_periodic_dp(problem: PeriodicDPProblem) -> PeriodicDPResult:
@@ -118,6 +153,9 @@ def solve_periodic_dp(problem: PeriodicDPProblem) -> PeriodicDPResult:
         problem.source_efficiency,
         problem.eta_charge,
         problem.eta_discharge,
+    )
+    exact_actions, exact_fuel, exact_residual = _exact_periodic_policy(
+        problem, analytical
     )
     lower = problem.demand_bus_kw / problem.source_efficiency
     upper = analytical.upper_bound_kw
@@ -183,7 +221,8 @@ def solve_periodic_dp(problem: PeriodicDPProblem) -> PeriodicDPResult:
         total_fuel_kg=total_fuel,
         mean_engine_power_kw=mean_engine,
         engine_off_fraction=off_fraction,
-        terminal_energy_error_kwh=current_energy - problem.initial_energy_kwh,
+        ledger_residual_kwh=0.0,
+        terminal_target_residual_kwh=current_energy - problem.initial_energy_kwh,
         terminal_energy_tolerance_kwh=terminal_tolerance,
         engine_on_power_mean_kw=float(np.mean(on)) if on else 0.0,
         actions_kw=tuple(selected_actions),
@@ -194,6 +233,17 @@ def solve_periodic_dp(problem: PeriodicDPProblem) -> PeriodicDPResult:
         duty_error=(1.0 - off_fraction) - analytical.duty_cycle,
         runtime_s=runtime,
         policy_memory_bytes=policy.nbytes,
+        exact_periodic_actions_kw=exact_actions,
+        analytical_lower_bound_kg=(
+            analytical.cycle_fuel_kg_h * problem.horizon_s / 3600.0
+        ),
+        feasible_upper_bound_kg=exact_fuel,
+        optimality_gap_kg=exact_fuel
+        - analytical.cycle_fuel_kg_h * problem.horizon_s / 3600.0,
+        validation_status=(
+            "valid relaxed lower bound and deterministic exactly periodic upper bound; "
+            f"energy residual={exact_residual:.3e} kWh"
+        ),
         problem=problem,
     )
 
@@ -221,11 +271,16 @@ def write_periodic_dp_csv(
                 "dp_engine_off_fraction": result.engine_off_fraction,
                 "analytical_engine_off_fraction": 1.0 - result.analytical.duty_cycle,
                 "duty_error": result.duty_error,
-                "terminal_energy_error_kwh": result.terminal_energy_error_kwh,
+                "ledger_residual_kwh": result.ledger_residual_kwh,
+                "terminal_target_residual_kwh": result.terminal_target_residual_kwh,
                 "terminal_energy_tolerance_kwh": result.terminal_energy_tolerance_kwh,
                 "restart_count": "undefined",
                 "runtime_s": result.runtime_s,
                 "policy_memory_bytes": result.policy_memory_bytes,
+                "analytical_lower_bound_kg": result.analytical_lower_bound_kg,
+                "feasible_upper_bound_kg": result.feasible_upper_bound_kg,
+                "optimality_gap_kg": result.optimality_gap_kg,
+                "validation_status": result.validation_status,
             }
         )
     if not records:

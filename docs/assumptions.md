@@ -677,6 +677,14 @@ The module is not imported by the simulator, mission factory, or optimization sk
 only when a caller explicitly injects `FuzzyECMS` through the existing controller interface.
 **Bias:** Unknown. These values are reproducible test defaults, not calibrated controller gains.
 
+### C-07 — Terminal-energy recovery tolerances and work cap
+**Value:** terminal-target tolerance 1×10⁻⁶ kWh for continuously adjustable replay solves;
+maximum 32 backward inductions per finite-horizon scenario. `VERIFIED` (numerical policy)
+**Rationale:** The independently measured 1×10⁻¹² kWh ledger-closure tolerance diagnoses
+roundoff and is not an optimisation tolerance. Discrete policies can jump across a finite energy
+interval, so scalar bisection terminates as soon as it repeats the same adjacent policy pair. The
+induction cap is a runtime guard and does not turn an unconverged result into a bound.
+
 ### S-01 — Fill-to-MTOW fuel policy
 **Value:** Fuel loaded = MTOW − dry mass. `VERIFIED`
 **Rationale:** Makes the powertrain-versus-fuel trade explicit and direct. Every kilogram spent on
@@ -889,6 +897,7 @@ actual editions before citation in the technical report.
 
 | Date | Change |
 |---|---|
+| 2026-08-07 | **Milestones 2/3 numerical-validity recovery.** Added C-07, separated ledger and terminal-target residuals, replaced raw opposite-energy fuel intervals with endpoint-policy data, added a 208-policy exhaustive oracle, Lagrangian dual lower bounds and exact discrete-target upper bounds, made dwell hard in thermostat and DP comparisons, and added caching, policy hashes, induction caps, incremental checkpoints and resume support. Historical production artifacts are retained but reclassified as exploratory in `docs/numerical_validity_recovery.md`. |
 | 2026-08-07 | **Opt-in `control/fuzzy_ecms.py` benchmark.** Added C-06 for a complete 3×3 zero-order Sugeno controller using SoC and normalized bus demand, with consequent bounds expressed as ratios around the marginal `switching_s` reference. The controller remains absent from mission defaults and the optimization skeleton, so O-08 stays open. Added contract, rule-coverage, gene-responsiveness, validation and power-split boundary tests. |
 | 2026-08-05 | **Marginal controller anchor, reserve semantics, and sizing interpretations.** Added `switching_s` to the controller context and made it the fixed-ratio and PI-ratio anchor; `neutral_s` remains an average-cost diagnostic. Resolved O-04 to engine shutdown by default while retaining idle sensitivity, and added simulator accounting for off-to-on restart fuel. Split S-04 into 4.7 kg for measured descent/landing consumption and a separate 5.0 kg post-landing reserve, with explicit reserve-shortfall reporting. Opened O-12 and recorded both constraint results: 133.270 kW with a required 10 km ceiling versus 86.779 kW when the stated altitude is treated as a selectable cruise band. |
 | — | Initial version. Fixed-mass group revised from 450 kg lumped to 250 kg itemized (M-02) following explicit modelling of wing and electrical chain masses. Engine specific power revised from 1.5 to 3.5 kW/kg (M-04). Constant SFC replaced by Willans line (E-01). |

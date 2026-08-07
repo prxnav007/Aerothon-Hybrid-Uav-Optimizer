@@ -20,23 +20,24 @@ from src.simulation.simulator import Aircraft, TimeStep
 
 __all__ = [
     "ConstraintEncounter",
-    "ENERGY_MATCH_TOLERANCE_KWH",
+    "LEDGER_CLOSURE_TOLERANCE_KWH",
+    "TERMINAL_TARGET_TOLERANCE_KWH",
     "EnergyMismatchError",
-    "EqualEnergyComparison",
-    "PIEnergyBracket",
+    "EndpointEnergyComparison",
+    "PIEndpointPolicyInterval",
     "PIReplayTrace",
     "ReplayComparison",
     "StrategyReplay",
     "compare_replays",
     "compare_replays_at_initial_soc",
-    "compare_equal_energy_replays",
-    "derive_energy_match_tolerance_kwh",
+    "compare_endpoint_energy_replays",
+    "derive_ledger_tolerance_kwh",
     "replay_pi_ecms",
     "replay_pi_ecms_trace",
     "resample_replay_steps",
-    "tune_pi_energy_bracket",
+    "tune_pi_endpoint_interval",
     "validated_fuel_gap",
-    "write_equal_energy_comparisons_csv",
+    "write_endpoint_energy_comparisons_csv",
     "write_replay_comparison_csv",
     "write_replay_comparisons_csv",
 ]
@@ -48,7 +49,7 @@ __all__ = [
 MILESTONE1B_MAX_PHYSICAL_RESIDUAL_KWH = 8.79296635503124e-14
 
 
-def derive_energy_match_tolerance_kwh(residual_kwh: float) -> float:
+def derive_ledger_tolerance_kwh(residual_kwh: float) -> float:
     """Round a measured positive numerical residual up by one decimal bin."""
     value = abs(float(residual_kwh))
     if not math.isfinite(value) or value <= 0.0:
@@ -56,9 +57,10 @@ def derive_energy_match_tolerance_kwh(residual_kwh: float) -> float:
     return 10.0 ** math.ceil(math.log10(value))
 
 
-ENERGY_MATCH_TOLERANCE_KWH = derive_energy_match_tolerance_kwh(
+LEDGER_CLOSURE_TOLERANCE_KWH = derive_ledger_tolerance_kwh(
     2.0 * MILESTONE1B_MAX_PHYSICAL_RESIDUAL_KWH
 )
+TERMINAL_TARGET_TOLERANCE_KWH = 1.0e-6
 
 
 class EnergyMismatchError(ValueError):
@@ -105,9 +107,9 @@ class StrategyReplay:
     maximum_soc: float
     battery_energy_change_kwh: float
     internal_ledger_energy_change_kwh: float
-    euler_energy_residual_kwh: float
+    ledger_residual_kwh: float
     target_battery_energy_change_kwh: float
-    terminal_energy_shortfall_kwh: float
+    terminal_target_residual_kwh: float
     battery_mode: str
     battery_capacity_kwh: float
     i_charge_max_a: float | None
@@ -122,6 +124,16 @@ class StrategyReplay:
     engine_shaft_power_minimum_kw: float | None = None
     engine_shaft_power_maximum_kw: float | None = None
     strategy_construction: str = ""
+
+    @property
+    def euler_energy_residual_kwh(self) -> float:
+        """Compatibility alias for the numerical ledger residual."""
+        return self.ledger_residual_kwh
+
+    @property
+    def terminal_energy_shortfall_kwh(self) -> float:
+        """Compatibility alias for the signed terminal-target residual."""
+        return self.terminal_target_residual_kwh
 
 
 @dataclass(frozen=True)
@@ -143,13 +155,13 @@ class ReplayComparison:
 
 
 @dataclass(frozen=True)
-class PIEnergyBracket:
-    """Nearest sampled PI calibrations bracketing one endpoint-energy target."""
+class PIEndpointPolicyInterval:
+    """Unequal-energy PI policies surrounding one endpoint-energy target."""
 
     lower_ratio: float
     upper_ratio: float
-    lower_result: StrategyReplay
-    upper_result: StrategyReplay
+    lower_energy_policy: StrategyReplay
+    upper_energy_policy: StrategyReplay
     target_kwh: float
     exact_match: bool
 
@@ -160,37 +172,36 @@ class PIEnergyBracket:
     @property
     def energy_width_kwh(self) -> float:
         return abs(
-            self.upper_result.battery_energy_change_kwh
-            - self.lower_result.battery_energy_change_kwh
+            self.upper_energy_policy.battery_energy_change_kwh
+            - self.lower_energy_policy.battery_energy_change_kwh
         )
 
     @property
-    def fuel_interval_kg(self) -> tuple[float, float]:
-        values = (
-            self.lower_result.fuel_consumed_kg,
-            self.upper_result.fuel_consumed_kg,
+    def policy_fuel_values_kg(self) -> tuple[float, float]:
+        return (
+            self.lower_energy_policy.fuel_consumed_kg,
+            self.upper_energy_policy.fuel_consumed_kg,
         )
-        return min(values), max(values)
 
 
 @dataclass(frozen=True)
-class EqualEnergyComparison:
-    """Equal-endpoint-energy comparison with a point or bracketed PI result."""
+class EndpointEnergyComparison:
+    """Endpoint target comparison with a point or unequal-energy PI policies."""
 
     comparison: str
     battery_mode: str
     timestep_s: float
     initial_soc: float
     target_battery_energy_change_kwh: float
-    energy_match_tolerance_kwh: float
+    terminal_target_tolerance_kwh: float
     continuous: StrategyReplay
     ideal_relaxed: StrategyReplay
-    pi_bracket: PIEnergyBracket
-    pi_to_continuous_gap_kg: tuple[float, float]
-    pi_to_continuous_gap_fraction: tuple[float, float]
-    pi_to_ideal_gap_kg: tuple[float, float]
-    pi_to_ideal_gap_fraction: tuple[float, float]
-    cycling_benefit_captured_fraction: tuple[float, float]
+    pi_endpoint_policy_interval: PIEndpointPolicyInterval
+    pi_to_continuous_gap_kg: float | None
+    pi_to_continuous_gap_fraction: float | None
+    pi_to_ideal_gap_kg: float | None
+    pi_to_ideal_gap_fraction: float | None
+    cycling_benefit_captured_fraction: float | None
     fuel_gap_status: str
 
 
@@ -297,7 +308,7 @@ def validated_fuel_gap(
     candidate: StrategyReplay,
     *,
     target_kwh: float,
-    tolerance_kwh: float = ENERGY_MATCH_TOLERANCE_KWH,
+    tolerance_kwh: float = TERMINAL_TARGET_TOLERANCE_KWH,
 ) -> tuple[float, float]:
     """Return reference-minus-candidate fuel only after endpoint-energy checks."""
     for result in (reference, candidate):
@@ -480,10 +491,10 @@ def replay_pi_ecms_trace(
         internal_ledger_energy_change_kwh=(
             ledger.internal_charge_kwh - ledger.internal_discharge_kwh
         ),
-        euler_energy_residual_kwh=energy_change
+        ledger_residual_kwh=energy_change
         - (ledger.internal_charge_kwh - ledger.internal_discharge_kwh),
         target_battery_energy_change_kwh=target,
-        terminal_energy_shortfall_kwh=energy_change - target,
+        terminal_target_residual_kwh=energy_change - target,
         battery_mode=aircraft.battery.battery_mode.value,
         battery_capacity_kwh=aircraft.battery.capacity_kwh,
         i_charge_max_a=aircraft.battery.i_charge_max_a,
@@ -541,9 +552,9 @@ def _continuous_replay(
         maximum_soc=initial_soc,
         battery_energy_change_kwh=0.0,
         internal_ledger_energy_change_kwh=0.0,
-        euler_energy_residual_kwh=0.0,
+        ledger_residual_kwh=0.0,
         target_battery_energy_change_kwh=target_kwh,
-        terminal_energy_shortfall_kwh=-target_kwh,
+        terminal_target_residual_kwh=-target_kwh,
         battery_mode=aircraft.battery.battery_mode.value,
         battery_capacity_kwh=aircraft.battery.capacity_kwh,
         i_charge_max_a=aircraft.battery.i_charge_max_a,
@@ -699,11 +710,11 @@ def _ideal_cycle_replay(
         internal_ledger_energy_change_kwh=(
             ledger.internal_charge_kwh - ledger.internal_discharge_kwh
         ),
-        euler_energy_residual_kwh=-(
+        ledger_residual_kwh=-(
             ledger.internal_charge_kwh - ledger.internal_discharge_kwh
         ),
         target_battery_energy_change_kwh=target_kwh,
-        terminal_energy_shortfall_kwh=-target_kwh,
+        terminal_target_residual_kwh=-target_kwh,
         battery_mode=aircraft.battery.battery_mode.value,
         battery_capacity_kwh=aircraft.battery.capacity_kwh,
         i_charge_max_a=aircraft.battery.i_charge_max_a,
@@ -785,9 +796,9 @@ def _continuous_assist_replay(
         maximum_soc=maximum_soc,
         battery_energy_change_kwh=energy_change,
         internal_ledger_energy_change_kwh=internal_change,
-        euler_energy_residual_kwh=energy_change - internal_change,
+        ledger_residual_kwh=energy_change - internal_change,
         target_battery_energy_change_kwh=target_kwh,
-        terminal_energy_shortfall_kwh=energy_change - target_kwh,
+        terminal_target_residual_kwh=energy_change - target_kwh,
         battery_mode=aircraft.battery.battery_mode.value,
         battery_capacity_kwh=aircraft.battery.capacity_kwh,
         i_charge_max_a=aircraft.battery.i_charge_max_a,
@@ -845,7 +856,7 @@ def _solve_continuous_assist_replay(
         middle = _continuous_assist_replay(
             steps, aircraft, initial_soc, target_kwh, middle_kw
         )
-        if abs(middle.terminal_energy_shortfall_kwh) <= ENERGY_MATCH_TOLERANCE_KWH:
+        if abs(middle.terminal_target_residual_kwh) <= TERMINAL_TARGET_TOLERANCE_KWH:
             return middle
         if middle.terminal_energy_shortfall_kwh > 0.0:
             lower_kw, lower = middle_kw, middle
@@ -931,7 +942,7 @@ def _ideal_depleting_replay(
         first = replace(boundary, dt_s=middle_s)
         candidate = _simulate_off_tail((first, *later), aircraft, initial_soc)
         tail = candidate
-        if abs(candidate.energy_change_kwh - target_kwh) <= ENERGY_MATCH_TOLERANCE_KWH:
+        if abs(candidate.energy_change_kwh - target_kwh) <= TERMINAL_TARGET_TOLERANCE_KWH:
             break
         if candidate.energy_change_kwh > target_kwh:
             lower_s = middle_s
@@ -979,9 +990,9 @@ def _ideal_depleting_replay(
         maximum_soc=initial_soc,
         battery_energy_change_kwh=energy_change,
         internal_ledger_energy_change_kwh=internal_change,
-        euler_energy_residual_kwh=energy_change - internal_change,
+        ledger_residual_kwh=energy_change - internal_change,
         target_battery_energy_change_kwh=target_kwh,
-        terminal_energy_shortfall_kwh=energy_change - target_kwh,
+        terminal_target_residual_kwh=energy_change - target_kwh,
         battery_mode=aircraft.battery.battery_mode.value,
         battery_capacity_kwh=aircraft.battery.capacity_kwh,
         i_charge_max_a=aircraft.battery.i_charge_max_a,
@@ -1000,7 +1011,7 @@ def _ideal_depleting_replay(
     )
 
 
-def tune_pi_energy_bracket(
+def tune_pi_endpoint_interval(
     steps: Sequence[TimeStep],
     aircraft: Aircraft,
     controller: EMSController,
@@ -1009,8 +1020,8 @@ def tune_pi_energy_bracket(
     initial_engine_shut_down: bool,
     target_kwh: float,
     search_increment: float = 0.02,
-) -> PIEnergyBracket:
-    """Tune the exposed PI anchor and retain a discontinuous energy bracket."""
+) -> PIEndpointPolicyInterval:
+    """Tune the PI anchor and retain unequal-energy policies around the target."""
     if not hasattr(controller, "s0_ratio"):
         raise ValueError("controller must expose the existing s0_ratio calibration")
     base_ratio = float(getattr(controller, "s0_ratio"))
@@ -1037,7 +1048,7 @@ def tune_pi_energy_bracket(
             (ratio, result)
             for ratio, result in results.items()
             if abs(result.terminal_energy_shortfall_kwh)
-            <= ENERGY_MATCH_TOLERANCE_KWH
+            <= TERMINAL_TARGET_TOLERANCE_KWH
         ]
         return min(matches, key=lambda item: abs(item[0] - base_ratio)) if matches else None
 
@@ -1059,7 +1070,7 @@ def tune_pi_energy_bracket(
     match = exact_match()
     if match is not None:
         ratio, result = match
-        return PIEnergyBracket(ratio, ratio, result, result, target_kwh, True)
+        return PIEndpointPolicyInterval(ratio, ratio, result, result, target_kwh, True)
 
     bracket = None
     for index in range(1, 76):
@@ -1070,7 +1081,9 @@ def tune_pi_energy_bracket(
         match = exact_match()
         if match is not None:
             ratio, result = match
-            return PIEnergyBracket(ratio, ratio, result, result, target_kwh, True)
+            return PIEndpointPolicyInterval(
+                ratio, ratio, result, result, target_kwh, True
+            )
         bracket = straddling_pair()
         if bracket is not None:
             break
@@ -1086,14 +1099,14 @@ def tune_pi_energy_bracket(
         )
 
     left_ratio, right_ratio, left, right = bracket
-    for _ in range(24):
+    for _ in range(12):
         middle_ratio = 0.5 * (left_ratio + right_ratio)
         middle = evaluate(middle_ratio)
         if (
             abs(middle.terminal_energy_shortfall_kwh)
-            <= ENERGY_MATCH_TOLERANCE_KWH
+            <= TERMINAL_TARGET_TOLERANCE_KWH
         ):
-            return PIEnergyBracket(
+            return PIEndpointPolicyInterval(
                 middle_ratio,
                 middle_ratio,
                 middle,
@@ -1101,6 +1114,10 @@ def tune_pi_energy_bracket(
                 target_kwh,
                 True,
             )
+        previous_pair = (
+            (left.fuel_consumed_kg, left.battery_energy_change_kwh, left.restart_count),
+            (right.fuel_consumed_kg, right.battery_energy_change_kwh, right.restart_count),
+        )
         if (
             left.terminal_energy_shortfall_kwh
             * middle.terminal_energy_shortfall_kwh
@@ -1109,17 +1126,29 @@ def tune_pi_energy_bracket(
             right_ratio, right = middle_ratio, middle
         else:
             left_ratio, left = middle_ratio, middle
-    return PIEnergyBracket(
+        current_pair = (
+            (left.fuel_consumed_kg, left.battery_energy_change_kwh, left.restart_count),
+            (right.fuel_consumed_kg, right.battery_energy_change_kwh, right.restart_count),
+        )
+        if current_pair == previous_pair:
+            break
+    lower_energy_policy = min(
+        (left, right), key=lambda result: result.battery_energy_change_kwh
+    )
+    upper_energy_policy = max(
+        (left, right), key=lambda result: result.battery_energy_change_kwh
+    )
+    return PIEndpointPolicyInterval(
         left_ratio,
         right_ratio,
-        left,
-        right,
+        lower_energy_policy,
+        upper_energy_policy,
         target_kwh,
         False,
     )
 
 
-def compare_equal_energy_replays(
+def compare_endpoint_energy_replays(
     steps: Sequence[TimeStep],
     aircraft: Aircraft,
     controller: EMSController,
@@ -1127,13 +1156,13 @@ def compare_equal_energy_replays(
     initial_soc: float,
     initial_engine_shut_down: bool,
     target_battery_energy_change_kwh: float,
-) -> EqualEnergyComparison:
-    """Compare three strategies at one endpoint stored-energy target."""
+) -> EndpointEnergyComparison:
+    """Compare exact points and descriptive PI endpoint policies."""
     entries = tuple(steps)
     _duration_h(entries)
     target = float(target_battery_energy_change_kwh)
     if target > 0.0 or not math.isfinite(target):
-        raise ValueError("equal-energy replay target must be finite and non-positive")
+        raise ValueError("endpoint-energy target must be finite and non-positive")
     continuous = _solve_continuous_assist_replay(
         entries, aircraft, initial_soc, target
     )
@@ -1143,7 +1172,7 @@ def compare_equal_energy_replays(
         else _ideal_depleting_replay(entries, aircraft, initial_soc, target)
     )
     validated_fuel_gap(continuous, ideal, target_kwh=target)
-    pi_bracket = tune_pi_energy_bracket(
+    interval = tune_pi_endpoint_interval(
         entries,
         aircraft,
         controller,
@@ -1151,47 +1180,44 @@ def compare_equal_energy_replays(
         initial_engine_shut_down=initial_engine_shut_down,
         target_kwh=target,
     )
-    pi_fuel_low, pi_fuel_high = pi_bracket.fuel_interval_kg
     continuous_fuel = continuous.fuel_consumed_kg
     ideal_fuel = ideal.fuel_consumed_kg
-    gap_cont_kg = (
-        continuous_fuel - pi_fuel_high,
-        continuous_fuel - pi_fuel_low,
-    )
-    gap_cont_fraction = tuple(value / continuous_fuel for value in gap_cont_kg)
-    gap_ideal_kg = (pi_fuel_low - ideal_fuel, pi_fuel_high - ideal_fuel)
-    gap_ideal_fraction = tuple(value / ideal_fuel for value in gap_ideal_kg)
-    available_benefit = continuous_fuel - ideal_fuel
-    captured = tuple(value / available_benefit for value in gap_cont_kg)
-    if pi_bracket.exact_match:
+    if interval.exact_match:
+        pi = interval.lower_energy_policy
         validated_fuel_gap(
             continuous,
-            pi_bracket.lower_result,
+            pi,
             target_kwh=target,
         )
-        status = (
-            "valid point gap: endpoint stored energy passes the numerical gate"
-        )
+        gap_cont_kg = continuous_fuel - pi.fuel_consumed_kg
+        gap_cont_fraction = gap_cont_kg / continuous_fuel
+        gap_ideal_kg = pi.fuel_consumed_kg - ideal_fuel
+        gap_ideal_fraction = gap_ideal_kg / ideal_fuel
+        captured = gap_cont_kg / (continuous_fuel - ideal_fuel)
+        status = "valid point gap: terminal target passes the optimisation tolerance"
     else:
-        low_residual = pi_bracket.lower_result.terminal_energy_shortfall_kwh
-        high_residual = pi_bracket.upper_result.terminal_energy_shortfall_kwh
+        low_residual = interval.lower_energy_policy.terminal_target_residual_kwh
+        high_residual = interval.upper_energy_policy.terminal_target_residual_kwh
         if low_residual * high_residual >= 0.0:
-            raise EnergyMismatchError("PI bracket does not straddle the target")
+            raise EnergyMismatchError("PI endpoint policies do not surround the target")
+        gap_cont_kg = gap_cont_fraction = None
+        gap_ideal_kg = gap_ideal_fraction = None
+        captured = None
         status = (
-            "valid bounded gap: the discontinuous PI endpoint energies straddle "
-            "the target; neither bracket endpoint is reported as a point gap"
+            "invalid fuel gap: unequal-energy PI policies surround the target; "
+            "their raw fuel values are descriptive and provide no fuel bounds"
         )
     comparison = "charge_sustaining" if target == 0.0 else "mission_depleting"
-    return EqualEnergyComparison(
+    return EndpointEnergyComparison(
         comparison=comparison,
         battery_mode=aircraft.battery.battery_mode.value,
         timestep_s=_reported_timestep_s(entries),
         initial_soc=initial_soc,
         target_battery_energy_change_kwh=target,
-        energy_match_tolerance_kwh=ENERGY_MATCH_TOLERANCE_KWH,
+        terminal_target_tolerance_kwh=TERMINAL_TARGET_TOLERANCE_KWH,
         continuous=continuous,
         ideal_relaxed=ideal,
-        pi_bracket=pi_bracket,
+        pi_endpoint_policy_interval=interval,
         pi_to_continuous_gap_kg=gap_cont_kg,
         pi_to_continuous_gap_fraction=gap_cont_fraction,
         pi_to_ideal_gap_kg=gap_ideal_kg,
@@ -1423,13 +1449,13 @@ def write_replay_comparisons_csv(
     return path
 
 
-def write_equal_energy_comparisons_csv(
-    comparisons: Sequence[EqualEnergyComparison], output_path: str | Path
+def write_endpoint_energy_comparisons_csv(
+    comparisons: Sequence[EndpointEnergyComparison], output_path: str | Path
 ) -> Path:
-    """Write point strategies and both sides of every discontinuous PI bracket."""
+    """Write point strategies and descriptive unequal-energy PI policies."""
     rows = []
     for comparison in comparisons:
-        bracket = comparison.pi_bracket
+        interval = comparison.pi_endpoint_policy_interval
         metadata = {
             "comparison": comparison.comparison,
             "comparison_battery_mode": comparison.battery_mode,
@@ -1438,29 +1464,19 @@ def write_equal_energy_comparisons_csv(
             "comparison_target_battery_energy_change_kwh": (
                 comparison.target_battery_energy_change_kwh
             ),
-            "energy_match_tolerance_kwh": comparison.energy_match_tolerance_kwh,
-            "pi_s0_ratio_lower": bracket.lower_ratio,
-            "pi_s0_ratio_upper": bracket.upper_ratio,
-            "pi_s0_ratio_bracket_width": bracket.parameter_width,
-            "pi_endpoint_energy_bracket_width_kwh": bracket.energy_width_kwh,
-            "pi_exact_match": bracket.exact_match,
-            "pi_to_continuous_gap_kg_low": comparison.pi_to_continuous_gap_kg[0],
-            "pi_to_continuous_gap_kg_high": comparison.pi_to_continuous_gap_kg[1],
-            "pi_to_continuous_gap_fraction_low": (
-                comparison.pi_to_continuous_gap_fraction[0]
-            ),
-            "pi_to_continuous_gap_fraction_high": (
-                comparison.pi_to_continuous_gap_fraction[1]
-            ),
-            "pi_to_ideal_gap_kg_low": comparison.pi_to_ideal_gap_kg[0],
-            "pi_to_ideal_gap_kg_high": comparison.pi_to_ideal_gap_kg[1],
-            "pi_to_ideal_gap_fraction_low": comparison.pi_to_ideal_gap_fraction[0],
-            "pi_to_ideal_gap_fraction_high": comparison.pi_to_ideal_gap_fraction[1],
-            "cycling_benefit_captured_fraction_low": (
-                comparison.cycling_benefit_captured_fraction[0]
-            ),
-            "cycling_benefit_captured_fraction_high": (
-                comparison.cycling_benefit_captured_fraction[1]
+            "terminal_target_tolerance_kwh": comparison.terminal_target_tolerance_kwh,
+            "pi_s0_ratio_lower": interval.lower_ratio,
+            "pi_s0_ratio_upper": interval.upper_ratio,
+            "pi_s0_ratio_interval_width": interval.parameter_width,
+            "pi_endpoint_energy_interval_width_kwh": interval.energy_width_kwh,
+            "pi_exact_match": interval.exact_match,
+            "pi_policy_fuel_values_kg": json.dumps(interval.policy_fuel_values_kg),
+            "pi_to_continuous_gap_kg": comparison.pi_to_continuous_gap_kg,
+            "pi_to_continuous_gap_fraction": comparison.pi_to_continuous_gap_fraction,
+            "pi_to_ideal_gap_kg": comparison.pi_to_ideal_gap_kg,
+            "pi_to_ideal_gap_fraction": comparison.pi_to_ideal_gap_fraction,
+            "cycling_benefit_captured_fraction": (
+                comparison.cycling_benefit_captured_fraction
             ),
             "fuel_gap_status": comparison.fuel_gap_status,
         }
@@ -1468,15 +1484,15 @@ def write_equal_energy_comparisons_csv(
             ("point", comparison.continuous),
             ("relaxed_point", comparison.ideal_relaxed),
         ]
-        if bracket.exact_match:
-            strategy_rows.append(("point", bracket.lower_result))
+        if interval.exact_match:
+            strategy_rows.append(("point", interval.lower_energy_policy))
         else:
             strategy_rows.extend(
-                (("bracket_lower_ratio", bracket.lower_result),
-                 ("bracket_upper_ratio", bracket.upper_result))
+                (("lower_energy_policy", interval.lower_energy_policy),
+                 ("upper_energy_policy", interval.upper_energy_policy))
             )
-        for bracket_role, result in strategy_rows:
-            row = asdict(result) | metadata | {"bracket_role": bracket_role}
+        for policy_role, result in strategy_rows:
+            row = asdict(result) | metadata | {"policy_role": policy_role}
             row["constraint_encounters"] = json.dumps(
                 row["constraint_encounters"], sort_keys=True
             )

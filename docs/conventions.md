@@ -162,6 +162,18 @@ start-of-step-OCV explicit-Euler bias rather than an omitted flow. Using the
 discrete `−V_oc,start·I·Δt` stored-energy update closes at 5.67×10⁻¹⁶ relative.
 The analytical charge-sustaining cycle closes below 1×10⁻¹⁴ relative.
 
+## Terminal-energy optimisation
+
+`ledger_residual_kwh` is an accounting diagnostic for one trajectory.
+`terminal_target_residual_kwh` is the signed miss against a requested comparison target. The
+ledger roundoff tolerance is never used as a discrete-policy optimisation tolerance.
+
+Opposite-energy deterministic policies define an endpoint-energy interval and two raw policy fuel
+values. They do not define a fuel or optimality interval without a separate proof. A valid lower
+bound is the maximised Lagrangian dual value; a valid upper bound is the fuel of a deterministic
+policy feasible at the same terminal target. Current finite-horizon bounds apply to the explicitly
+snapped discrete SoC/action model, while continuous replay is a separately labelled diagnostic.
+
 ## Feasibility metric labels
 
 The discharge-feasibility study uses two unrelated percentages. The

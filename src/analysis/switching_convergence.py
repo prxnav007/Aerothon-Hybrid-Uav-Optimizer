@@ -1,4 +1,4 @@
-"""Fuel and switching convergence for equal-energy replay comparisons."""
+"""Fuel and switching convergence for endpoint-energy replay policies."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-from src.analysis.replay_comparison import EqualEnergyComparison, StrategyReplay
+from src.analysis.replay_comparison import EndpointEnergyComparison, StrategyReplay
 
 __all__ = [
     "SwitchingConvergenceRow",
@@ -21,23 +21,21 @@ __all__ = [
 
 @dataclass(frozen=True)
 class SwitchingConvergenceRow:
-    """One strategy or PI-bracket edge at one replay timestep."""
+    """One point strategy or unequal-energy PI policy at one timestep."""
 
     comparison: str
     battery_mode: str
     timestep_s: float
     strategy: str
-    bracket_role: str
+    policy_role: str
     s0_ratio: float | None
     target_kwh: float
     endpoint_energy_residual_kwh: float
     fuel_consumed_kg: float
     fuel_convergence_order: float | None
     fuel_convergence_status: str
-    pi_to_continuous_gap_kg_low: float
-    pi_to_continuous_gap_kg_high: float
-    pi_to_ideal_gap_kg_low: float
-    pi_to_ideal_gap_kg_high: float
+    pi_to_continuous_gap_kg: float | None
+    pi_to_ideal_gap_kg: float | None
     restart_count: int | None
     restarts_per_flight_hour: float | None
     restart_frequency_grows_monotonically: bool | None
@@ -48,7 +46,7 @@ def _duration_h(result: StrategyReplay) -> float:
 
 
 def _raw_rows(
-    comparisons: Sequence[EqualEnergyComparison],
+    comparisons: Sequence[EndpointEnergyComparison],
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for comparison in comparisons:
@@ -56,14 +54,14 @@ def _raw_rows(
             ("point", comparison.continuous),
             ("relaxed_point", comparison.ideal_relaxed),
         ]
-        bracket = comparison.pi_bracket
-        if bracket.exact_match:
-            strategies.append(("point", bracket.lower_result))
+        interval = comparison.pi_endpoint_policy_interval
+        if interval.exact_match:
+            strategies.append(("point", interval.lower_energy_policy))
         else:
             strategies.extend(
                 (
-                    ("bracket_lower_ratio", bracket.lower_result),
-                    ("bracket_upper_ratio", bracket.upper_result),
+                    ("lower_energy_policy", interval.lower_energy_policy),
+                    ("upper_energy_policy", interval.upper_energy_policy),
                 )
             )
         for role, result in strategies:
@@ -78,21 +76,15 @@ def _raw_rows(
                     "battery_mode": comparison.battery_mode,
                     "timestep_s": comparison.timestep_s,
                     "strategy": result.strategy,
-                    "bracket_role": role,
+                    "policy_role": role,
                     "s0_ratio": result.calibration_parameter_value,
                     "target_kwh": comparison.target_battery_energy_change_kwh,
                     "endpoint_energy_residual_kwh": (
                         result.terminal_energy_shortfall_kwh
                     ),
                     "fuel_consumed_kg": result.fuel_consumed_kg,
-                    "pi_to_continuous_gap_kg_low": (
-                        comparison.pi_to_continuous_gap_kg[0]
-                    ),
-                    "pi_to_continuous_gap_kg_high": (
-                        comparison.pi_to_continuous_gap_kg[1]
-                    ),
-                    "pi_to_ideal_gap_kg_low": comparison.pi_to_ideal_gap_kg[0],
-                    "pi_to_ideal_gap_kg_high": comparison.pi_to_ideal_gap_kg[1],
+                    "pi_to_continuous_gap_kg": comparison.pi_to_continuous_gap_kg,
+                    "pi_to_ideal_gap_kg": comparison.pi_to_ideal_gap_kg,
                     "restart_count": result.restart_count,
                     "restarts_per_flight_hour": restart_rate,
                 }
@@ -115,7 +107,7 @@ def _observed_order(values: Sequence[tuple[float, float]]) -> tuple[float | None
 
 
 def build_switching_convergence_rows(
-    comparisons: Sequence[EqualEnergyComparison],
+    comparisons: Sequence[EndpointEnergyComparison],
 ) -> tuple[SwitchingConvergenceRow, ...]:
     """Flatten comparisons and add fuel-order and PI restart-trend diagnostics."""
     raw = _raw_rows(comparisons)
@@ -125,7 +117,7 @@ def build_switching_convergence_rows(
             str(row["comparison"]),
             str(row["battery_mode"]),
             str(row["strategy"]),
-            str(row["bracket_role"]),
+            str(row["policy_role"]),
         )
         fuel_series.setdefault(key, []).append(
             (float(row["timestep_s"]), float(row["fuel_consumed_kg"]))
@@ -161,7 +153,7 @@ def build_switching_convergence_rows(
             str(row["comparison"]),
             str(row["battery_mode"]),
             str(row["strategy"]),
-            str(row["bracket_role"]),
+            str(row["policy_role"]),
         )
         order, status = _observed_order(fuel_series[key])
         trend = (
@@ -216,7 +208,7 @@ def write_switching_convergence_csv(
 def plot_switching_convergence(
     rows: Sequence[SwitchingConvergenceRow], output_path: str | Path
 ) -> Path:
-    """Plot PI restart-rate brackets against replay timestep."""
+    """Plot PI restart-rate ranges across unequal-energy policies."""
     import matplotlib.pyplot as plt
 
     pi_rows = [row for row in rows if row.strategy == "pi_ecms"]

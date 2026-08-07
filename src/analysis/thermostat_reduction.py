@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Sequence
 
 import numpy as np
 
 from src.analysis.finite_horizon_dp import (
-    FiniteHorizonDPBracket,
+    FiniteHorizonDPBounds,
     FiniteHorizonDPResult,
 )
 from src.analysis.thermostat_comparison import (
-    ThermostatEnergyBracket,
-    tune_thermostat_energy_bracket,
+    ThermostatEndpointPolicyInterval,
+    tune_thermostat_endpoint_interval,
 )
 from src.control.thermostat import (
     TerminalStrategy,
@@ -27,7 +28,7 @@ __all__ = ["ThermostatReduction", "reduce_dp_to_thermostat"]
 
 @dataclass(frozen=True)
 class ThermostatReduction:
-    """DP transition statistics and equal-energy reduced-policy replay."""
+    """DP transition statistics and unequal-energy reduced-policy replay."""
 
     extracted_soc_low: float
     extracted_soc_high: float
@@ -37,11 +38,11 @@ class ThermostatReduction:
     shutdown_demand_range_kw: tuple[float, float]
     early_late_restart_soc_shift: float
     early_late_shutdown_soc_shift: float
-    thermostat_bracket: ThermostatEnergyBracket | None
-    thermostat_fuel_interval_kg: tuple[float, float] | None
-    dp_fuel_interval_kg: tuple[float, float]
-    thermostat_gap_to_dp_kg: tuple[float, float] | None
-    endpoint_energy_matched: bool
+    thermostat_endpoint_policy_interval: ThermostatEndpointPolicyInterval | None
+    thermostat_policy_fuel_values_kg: tuple[float, float] | None
+    dp_policy_fuel_values_kg: tuple[float, float]
+    endpoint_target_surrounded: bool
+    fuel_gap_status: str
     preview_dependent: bool
     replay_status: str
 
@@ -86,30 +87,54 @@ def _early_late_shift(samples: Sequence[tuple[float, float, float]]) -> float:
 
 
 def reduce_dp_to_thermostat(
-    dp: FiniteHorizonDPBracket,
+    dp: FiniteHorizonDPBounds,
     steps: Sequence[TimeStep],
     aircraft: Aircraft,
 ) -> ThermostatReduction:
-    """Fit independent thresholds, then enforce the same endpoint-energy target."""
+    """Fit independent thresholds and report their endpoint-policy interval."""
     entries = tuple(steps)
     restart_samples: list[tuple[float, float, float]] = []
     shutdown_samples: list[tuple[float, float, float]] = []
-    for result in (dp.lower_energy_result, dp.upper_energy_result):
+    for result in (dp.lower_energy_policy, dp.upper_energy_policy):
         restarts, shutdowns = _transition_samples(result, entries)
         restart_samples.extend(restarts)
         shutdown_samples.extend(shutdowns)
     if not restart_samples or not shutdown_samples:
-        raise RuntimeError("DP policy does not contain both switching directions")
+        problem = dp.lower_energy_policy.problem
+        missing = []
+        if not restart_samples:
+            missing.append("restart")
+        if not shutdown_samples:
+            missing.append("shutdown")
+        return ThermostatReduction(
+            extracted_soc_low=aircraft.battery.soc_min,
+            extracted_soc_high=1.0,
+            restart_soc_range=(math.nan, math.nan),
+            shutdown_soc_range=(math.nan, math.nan),
+            restart_demand_range_kw=(math.nan, math.nan),
+            shutdown_demand_range_kw=(math.nan, math.nan),
+            early_late_restart_soc_shift=0.0,
+            early_late_shutdown_soc_shift=0.0,
+            thermostat_endpoint_policy_interval=None,
+            thermostat_policy_fuel_values_kg=None,
+            dp_policy_fuel_values_kg=dp.policy_fuel_values_kg,
+            endpoint_target_surrounded=False,
+            fuel_gap_status=(
+                "invalid across unequal terminal energy; policy fuels are descriptive only"
+            ),
+            preview_dependent=problem.target_energy_change_kwh < 0.0,
+            replay_status="unresolved: missing " + " and ".join(missing) + " transitions",
+        )
     restart_soc = [sample[0] for sample in restart_samples]
     shutdown_soc = [sample[0] for sample in shutdown_samples]
-    soc_low = float(np.median(restart_soc))
+    soc_low = max(float(np.median(restart_soc)), aircraft.battery.soc_min)
     soc_high = float(np.median(shutdown_soc))
     if soc_low >= soc_high:
         soc_low = float(np.quantile(restart_soc, 0.25))
         soc_high = float(np.quantile(shutdown_soc, 0.75))
     if soc_low >= soc_high:
         raise RuntimeError("DP switching surface is not ordered as a thermostat")
-    problem = dp.lower_energy_result.problem
+    problem = dp.lower_energy_policy.problem
     preview = problem.target_energy_change_kwh < 0.0
     parameters = ThermostatParameters(
         soc_low=soc_low,
@@ -130,7 +155,7 @@ def reduce_dp_to_thermostat(
     thermostat = None
     for parameter_name in ("soc_low", "soc_high"):
         try:
-            thermostat = tune_thermostat_energy_bracket(
+            thermostat = tune_thermostat_endpoint_interval(
                 entries,
                 aircraft,
                 parameters,
@@ -142,27 +167,21 @@ def reduce_dp_to_thermostat(
             break
         except RuntimeError as error:
             failures.append(str(error))
-    thermostat_fuel = thermostat.fuel_interval_kg if thermostat is not None else None
-    dp_fuel = dp.fuel_interval_kg
-    gap = (
-        (
-            thermostat_fuel[0] - dp_fuel[1],
-            thermostat_fuel[1] - dp_fuel[0],
-        )
-        if thermostat_fuel is not None
-        else None
+    thermostat_fuel = (
+        thermostat.policy_fuel_values_kg if thermostat is not None else None
     )
+    dp_fuel = dp.policy_fuel_values_kg
     matched = False
     if thermostat is not None:
         matched = (
             min(
-                thermostat.lower_result.endpoint_energy_change_kwh,
-                thermostat.upper_result.endpoint_energy_change_kwh,
+                thermostat.lower_energy_policy.endpoint_energy_change_kwh,
+                thermostat.upper_energy_policy.endpoint_energy_change_kwh,
             )
             <= problem.target_energy_change_kwh
             <= max(
-                thermostat.lower_result.endpoint_energy_change_kwh,
-                thermostat.upper_result.endpoint_energy_change_kwh,
+                thermostat.lower_energy_policy.endpoint_energy_change_kwh,
+                thermostat.upper_energy_policy.endpoint_energy_change_kwh,
             )
         )
     return ThermostatReduction(
@@ -174,14 +193,16 @@ def reduce_dp_to_thermostat(
         shutdown_demand_range_kw=_range([sample[1] for sample in shutdown_samples]),
         early_late_restart_soc_shift=_early_late_shift(restart_samples),
         early_late_shutdown_soc_shift=_early_late_shift(shutdown_samples),
-        thermostat_bracket=thermostat,
-        thermostat_fuel_interval_kg=thermostat_fuel,
-        dp_fuel_interval_kg=dp_fuel,
-        thermostat_gap_to_dp_kg=gap,
-        endpoint_energy_matched=matched,
+        thermostat_endpoint_policy_interval=thermostat,
+        thermostat_policy_fuel_values_kg=thermostat_fuel,
+        dp_policy_fuel_values_kg=dp_fuel,
+        endpoint_target_surrounded=matched,
+        fuel_gap_status=(
+            "invalid across unequal terminal energy; policy fuels are descriptive only"
+        ),
         preview_dependent=preview,
         replay_status=(
-            "endpoint_energy_bracketed"
+            "endpoint_energy_interval_found"
             if matched
             else "unresolved: " + " | ".join(failures)
         ),

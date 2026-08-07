@@ -32,10 +32,33 @@ def test_periodic_dp_recovers_the_matched_analytical_fuel_and_duty() -> None:
     result = solve_periodic_dp(_problem())
     assert abs(result.fuel_error_fraction) < 3.0e-4
     assert abs(result.duty_error) < 5.0e-4
-    assert abs(result.terminal_energy_error_kwh) <= 0.025
+    assert abs(result.terminal_target_residual_kwh) <= 0.025
     assert abs(
         result.engine_on_power_mean_kw - result.analytical.engine_on_kw
     ) / result.analytical.engine_on_kw < 1.0e-3
+
+
+def test_exact_periodic_construction_gives_valid_matched_problem_bounds() -> None:
+    result = solve_periodic_dp(_problem(timestep_s=120.0))
+    exact_residual = sum(
+        (
+            -result.problem.demand_bus_kw / result.problem.eta_discharge
+            if action == 0.0
+            else result.problem.eta_charge
+            * (
+                result.problem.source_efficiency * action
+                - result.problem.demand_bus_kw
+            )
+        )
+        * result.problem.timestep_s
+        / 3600.0
+        for action in result.exact_periodic_actions_kw
+    )
+    assert exact_residual == pytest.approx(0.0, abs=1.0e-12)
+    assert result.analytical_lower_bound_kg <= result.feasible_upper_bound_kg
+    assert result.optimality_gap_kg == pytest.approx(
+        result.feasible_upper_bound_kg - result.analytical_lower_bound_kg
+    )
 
 
 def test_periodic_dp_uses_the_same_battery_sign_convention_as_the_cycle_model() -> None:

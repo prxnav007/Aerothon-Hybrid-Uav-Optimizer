@@ -109,12 +109,14 @@ def test_initial_engine_state_and_timer_are_explicit(parameters, components) -> 
     assert not on.engine_off
 
 
-def test_infeasible_off_state_forces_continuous_engine_operation(parameters) -> None:
+def test_hard_off_dwell_never_uses_an_early_safety_restart(parameters) -> None:
     components = Turboshaft(100.0), BatteryPack(5.0), SeriesPowertrain()
     decision = _step(
         parameters, ThermostatState(False, 0.0), components, demand=20.0
     )
-    assert not decision.engine_off
+    assert decision.engine_off
+    assert not decision.feasible
+    assert decision.restart_fuel_kg == 0.0
     assert decision.regime is ThermostatRegime.CONTINUOUS
     assert decision.regime_reason == "battery_cannot_carry_full_demand"
 
@@ -144,14 +146,15 @@ def test_engine_without_shutdown_cannot_be_labelled_off(parameters) -> None:
     assert decision.regime is ThermostatRegime.CONTINUOUS
 
 
-def test_cutoff_and_discharge_limit_override_nominal_off_dwell(
+def test_cutoff_and_discharge_limit_are_reported_infeasible_during_hard_off_dwell(
     parameters, components
 ) -> None:
     decision = _step(
         parameters, ThermostatState(False, 0.0), components, soc=0.05
     )
-    assert not decision.engine_off
-    assert decision.restart_fuel_kg == pytest.approx(0.1)
+    assert decision.engine_off
+    assert not decision.feasible
+    assert decision.restart_fuel_kg == 0.0
 
 
 def test_computed_on_power_selects_a_real_feasible_boundary(components) -> None:
@@ -167,6 +170,77 @@ def test_computed_on_power_selects_a_real_feasible_boundary(components) -> None:
     )
     assert selection.cycling_beneficial
     assert selection.active_constraint in {"engine_max", "battery_charge_limit"}
+
+
+def test_pack_specific_lower_threshold_cannot_lie_below_cutoff(components) -> None:
+    parameters = ThermostatParameters(
+        soc_low=0.01,
+        soc_high=0.6,
+        minimum_on_time_s=0.0,
+        minimum_off_time_s=0.0,
+        restart_fuel_kg=0.0,
+        engine_on_power_kw=None,
+        terminal_strategy=TerminalStrategy.CAUSAL,
+    )
+    with pytest.raises(ValueError, match="battery cutoff"):
+        _step(parameters, ThermostatState(True, 0.0), components)
+
+
+def test_hard_on_dwell_uses_load_following_at_the_soc_ceiling(
+    parameters, components
+) -> None:
+    decision = _step(
+        parameters,
+        ThermostatState(True, 60.0),
+        components,
+        soc=1.0,
+        demand=20.0,
+    )
+    assert not decision.engine_off
+    assert decision.active_constraint == "cycling_not_economic"
+    assert decision.battery_bus_kw == pytest.approx(0.0, abs=1.0e-10)
+    assert decision.feasible
+
+
+def test_future_off_dwell_infeasibility_prevents_shutdown(
+    parameters, components
+) -> None:
+    preview_parameters = replace(
+        parameters, terminal_strategy=TerminalStrategy.HORIZON_AWARE
+    )
+    decision = _step(
+        preview_parameters,
+        ThermostatState(True, 120.0),
+        components,
+        soc=0.7,
+        off_dwell_feasible=False,
+        time_to_go_s=3600.0,
+        terminal_energy_target_kwh=float(components[1].stored_energy_kwh(0.3)),
+    )
+    assert not decision.engine_off
+    assert decision.active_constraint == "hard_dwell_load_following"
+
+
+def test_causal_current_action_ignores_future_dwell_feasibility_signal(
+    parameters, components
+) -> None:
+    state = ThermostatState(True, 120.0)
+    future_easy = _step(
+        parameters,
+        state,
+        components,
+        soc=0.7,
+        off_dwell_feasible=True,
+    )
+    future_hard = _step(
+        parameters,
+        state,
+        components,
+        soc=0.7,
+        off_dwell_feasible=False,
+    )
+    assert future_easy.engine_off == future_hard.engine_off
+    assert future_easy.engine_shaft_kw == pytest.approx(future_hard.engine_shaft_kw)
 
 
 def test_terminal_depletion_requires_and_exposes_preview(parameters, components) -> None:

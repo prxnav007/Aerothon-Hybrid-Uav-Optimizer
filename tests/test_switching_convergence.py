@@ -1,4 +1,4 @@
-"""Switching-frequency regression for the equal-energy PI replay."""
+"""Switching-frequency regression for endpoint-energy PI policies."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from src.analysis.replay_comparison import replay_pi_ecms, resample_replay_steps
 from tests.test_baseline_regression import _reproduce_baseline
 
 
-def test_energy_bracketed_pi_restart_frequency_grows_with_sample_rate() -> None:
+def test_endpoint_policy_restart_frequency_grows_with_sample_rate() -> None:
     _, _, result, _, aircraft, controller = _reproduce_baseline()
     assert result.log is not None
     window = select_post_crossing_window(

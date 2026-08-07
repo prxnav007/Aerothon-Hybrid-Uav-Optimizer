@@ -8,9 +8,9 @@ import pytest
 
 from src.analysis.mode_decomposition import select_post_crossing_window
 from src.analysis.replay_comparison import (
-    ENERGY_MATCH_TOLERANCE_KWH,
+    TERMINAL_TARGET_TOLERANCE_KWH,
     EnergyMismatchError,
-    compare_equal_energy_replays,
+    compare_endpoint_energy_replays,
     compare_replays,
     compare_replays_at_initial_soc,
     replay_pi_ecms,
@@ -62,14 +62,14 @@ def equal_energy_legacy(representative_case):
         initial_soc=window.initial_soc,
         initial_engine_shut_down=window.crossing_step.engine_shut_down,
     )
-    sustaining = compare_equal_energy_replays(
+    sustaining = compare_endpoint_energy_replays(
         window.steps,
         aircraft,
         controller,
         target_battery_energy_change_kwh=0.0,
         **common,
     )
-    depleting = compare_equal_energy_replays(
+    depleting = compare_endpoint_energy_replays(
         window.steps,
         aircraft,
         controller,
@@ -215,12 +215,12 @@ def test_equal_energy_replay_uses_the_measured_soc_and_endpoint_gate(
 ) -> None:
     sustaining, depleting = equal_energy_legacy
     assert sustaining.initial_soc == pytest.approx(0.559342988331593)
-    assert sustaining.energy_match_tolerance_kwh == pytest.approx(1.0e-12)
+    assert sustaining.terminal_target_tolerance_kwh == pytest.approx(1.0e-6)
     for comparison in (sustaining, depleting):
         target = comparison.target_battery_energy_change_kwh
         for result in (comparison.continuous, comparison.ideal_relaxed):
             assert abs(result.battery_energy_change_kwh - target) <= (
-                ENERGY_MATCH_TOLERANCE_KWH
+                TERMINAL_TARGET_TOLERANCE_KWH
             )
     assert depleting.continuous.calibration_parameter_value == pytest.approx(
         0.4503825786896414
@@ -228,17 +228,18 @@ def test_equal_energy_replay_uses_the_measured_soc_and_endpoint_gate(
     assert depleting.ideal_relaxed.restart_count is None
 
 
-def test_discrete_pi_is_reported_as_a_bracket_not_an_interpolated_point(
+def test_discrete_pi_is_reported_as_unequal_energy_policies_without_fuel_bounds(
     equal_energy_legacy,
 ) -> None:
     sustaining, depleting = equal_energy_legacy
-    bracket = sustaining.pi_bracket
-    assert not bracket.exact_match
+    interval = sustaining.pi_endpoint_policy_interval
+    assert not interval.exact_match
     assert (
-        bracket.lower_result.terminal_energy_shortfall_kwh
-        * bracket.upper_result.terminal_energy_shortfall_kwh
+        interval.lower_energy_policy.terminal_target_residual_kwh
+        * interval.upper_energy_policy.terminal_target_residual_kwh
         < 0.0
     )
-    assert bracket.parameter_width > 0.0
-    assert "bounded gap" in sustaining.fuel_gap_status
-    assert depleting.pi_bracket.exact_match
+    assert interval.parameter_width > 0.0
+    assert sustaining.pi_to_continuous_gap_kg is None
+    assert "invalid fuel gap" in sustaining.fuel_gap_status
+    assert depleting.pi_endpoint_policy_interval.exact_match

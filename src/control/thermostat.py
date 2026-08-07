@@ -13,6 +13,7 @@ from src.models.engine import LHV_KJ_KG, Turboshaft
 from src.models.powertrain import SeriesPowertrain
 
 __all__ = [
+    "DwellSemantics",
     "TerminalStrategy",
     "ThermostatDecision",
     "ThermostatParameters",
@@ -39,6 +40,12 @@ class TerminalStrategy(str, Enum):
     HORIZON_AWARE = "horizon_aware"
 
 
+class DwellSemantics(str, Enum):
+    """Interpretation of minimum engine ON and OFF times."""
+
+    HARD = "hard"
+
+
 class ThermostatRegime(str, Enum):
     """Physical operating regime selected for one step."""
 
@@ -59,6 +66,7 @@ class ThermostatParameters:
     restart_fuel_kg: float
     engine_on_power_kw: float | None
     terminal_strategy: TerminalStrategy | str
+    dwell_semantics: DwellSemantics | str = DwellSemantics.HARD
 
     def __post_init__(self) -> None:
         low = _finite("soc_low", self.soc_low)
@@ -78,6 +86,11 @@ class ThermostatParameters:
         except (TypeError, ValueError) as error:
             raise ValueError("terminal_strategy must be causal or horizon_aware") from error
         object.__setattr__(self, "terminal_strategy", strategy)
+        try:
+            dwell = DwellSemantics(self.dwell_semantics)
+        except (TypeError, ValueError) as error:
+            raise ValueError("dwell_semantics must be hard") from error
+        object.__setattr__(self, "dwell_semantics", dwell)
 
 
 @dataclass(frozen=True)
@@ -111,6 +124,7 @@ class ThermostatDecision:
     regime_reason: str
     active_constraint: str
     transitioned: bool
+    dwell_violation: bool
     next_state: ThermostatState
     feasible: bool
 
@@ -135,7 +149,7 @@ def select_engine_on_power(
     explicit_power_kw: float | None = None,
     action_count: int = 129,
 ) -> _OnPowerSelection:
-    """Minimise average sustaining-cycle fuel over the feasible ON interval."""
+    """Select fuel-minimising ON power within the active charge constraint."""
     demand = _finite("demand_bus_kw", demand_bus_kw)
     duration = _finite("dt_s", dt_s)
     if demand < 0.0 or duration <= 0.0:
@@ -237,6 +251,7 @@ def thermostat_step(
     powertrain: SeriesPowertrain,
     time_to_go_s: float | None = None,
     terminal_energy_target_kwh: float | None = None,
+    off_dwell_feasible: bool | None = None,
 ) -> ThermostatDecision:
     """Advance a thermostat schedule without mutating controller or plant state."""
     demand = _finite("demand_bus_kw", demand_bus_kw)
@@ -245,6 +260,8 @@ def thermostat_step(
         raise ValueError("demand must be non-negative and dt_s positive")
     if not battery.soc_min <= soc <= 1.0:
         raise ValueError("soc lies outside the usable battery interval")
+    if parameters.soc_low < battery.soc_min:
+        raise ValueError("soc_low must not lie below the battery cutoff")
     engine_max = engine.max_power_kw(sigma)
     engine_bus_max = float(powertrain.bus_power_from_engine(engine_max))
     discharge_limit = battery.available_discharge_kw(soc, duration)
@@ -319,25 +336,41 @@ def thermostat_step(
                 if soc <= parameters.soc_low + SOC_EPS and can_start:
                     requested_on = True
 
-    safety_restart = not state.engine_on and not off_feasible
-    if safety_restart:
-        requested_on = True
+    dwell_forced_on = False
     if state.engine_on and not requested_on:
         dwell_met = state.elapsed_in_state_s >= parameters.minimum_on_time_s
         requested_on = not dwell_met
-    if not state.engine_on and requested_on and not safety_restart:
-        dwell_met = state.elapsed_in_state_s >= parameters.minimum_off_time_s
-        if terminal and terminal_energy_target_kwh is not None:
-            at_target = (
-                float(battery.stored_energy_kwh(soc))
-                <= terminal_energy_target_kwh + 1.0e-12
+        dwell_forced_on = requested_on
+        if dwell_met:
+            hold_s = max(parameters.minimum_off_time_s, duration)
+            local_off_feasible = (
+                battery.available_discharge_kw(soc, hold_s)
+                + _POWER_TOLERANCE_KW
+                >= demand
             )
-        else:
-            at_target = False
-        requested_on = dwell_met or at_target
+            preview_allowed = (
+                parameters.terminal_strategy is TerminalStrategy.HORIZON_AWARE
+            )
+            permitted = (
+                off_dwell_feasible
+                if preview_allowed and off_dwell_feasible is not None
+                else local_off_feasible
+            )
+            if not permitted:
+                requested_on = True
+                dwell_forced_on = True
+    if not state.engine_on and requested_on:
+        dwell_met = state.elapsed_in_state_s >= parameters.minimum_off_time_s
+        requested_on = dwell_met
 
     if requested_on:
-        if regime is ThermostatRegime.CYCLING:
+        if dwell_forced_on:
+            command_kw = min(
+                max(float(powertrain.engine_power_for_bus(demand)), engine.idle_power_kw),
+                engine_max,
+            )
+            active = "hard_dwell_load_following"
+        elif regime is ThermostatRegime.CYCLING:
             command_kw = engine_kw
         elif regime is ThermostatRegime.BATTERY_ASSISTED:
             command_kw = engine_max
@@ -376,6 +409,7 @@ def thermostat_step(
         regime_reason=reason,
         active_constraint=active,
         transitioned=transitioned,
+        dwell_violation=False,
         next_state=next_state,
         feasible=feasible,
     )
