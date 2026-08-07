@@ -1,0 +1,208 @@
+{
+  "accounting": {
+    "battery_integration_residual_kwh": 0.663377476490461,
+    "discrete_energy_balance_residual_fraction": 1.344560791158317e-16,
+    "energy_balance_residual_fraction": 0.0001961421749653576,
+    "energy_balance_residual_kwh": -0.6633774764900409,
+    "fuel_reconstruction_residual_kg": -2.2737367544323206e-13,
+    "maximum_bus_balance_residual_kw": 2.0250467969162855e-13
+  },
+  "aircraft": {
+    "battery_capacity_kwh": 10.0,
+    "dry_mass_kg": 711.3898016890586,
+    "engine_rated_power_kw": 86.7791369750147,
+    "mtow_kg": 1000.0,
+    "wing_area_m2": 7.59175537062125
+  },
+  "battery": {
+    "bus_charge_kwh": 75.65090388638254,
+    "bus_discharge_kwh": 80.3456375488575,
+    "final_soc": 0.5187794330353487,
+    "initial_soc": 1.0,
+    "minimum_soc": 0.35323007103028303
+  },
+  "configuration": {
+    "causal_future_information_used": false,
+    "initial_state": {
+      "elapsed_in_state_s": 60.0,
+      "engine_on": true,
+      "restart_count": 0,
+      "terminal_depletion": false
+    },
+    "initial_state_rationale": "engine available at mission start with minimum ON dwell already satisfied; initial availability is not counted as a restart",
+    "parameters": {
+      "dwell_semantics": "hard",
+      "engine_on_power_kw": null,
+      "minimum_off_time_s": 60.0,
+      "minimum_on_time_s": 60.0,
+      "restart_fuel_kg": 0.0,
+      "soc_high": 0.6,
+      "soc_low": 0.4,
+      "terminal_strategy": "causal"
+    },
+    "restart_fuel_owner": "run_mission charges the engine-model restart value once per actual OFF-to-ON transition",
+    "timestep_s": 60.0
+  },
+  "constraints": {
+    "battery": {
+      "charge:legacy_power": {
+        "duration_s": 27234.325399097717,
+        "steps": 455
+      }
+    },
+    "controller": {
+      "battery_cannot_carry_full_demand": {
+        "duration_s": 16020.0,
+        "steps": 267
+      },
+      "battery_charge_limit": {
+        "duration_s": 38094.32539909772,
+        "steps": 636
+      },
+      "engine_max": {
+        "duration_s": 1500.0,
+        "steps": 25
+      }
+    }
+  },
+  "engine_schedule": {
+    "delivered_on_power_range": {
+      "maximum_kw": 86.7791369750147,
+      "minimum_kw": 27.139989994975664
+    },
+    "loiter_engine_off_fraction": 0.21065737411780117,
+    "loiter_restarts_per_hour": 2.3379315509027645,
+    "off_duration_distribution": {
+      "count": 33,
+      "maximum_s": 480.0,
+      "mean_s": 329.09090909090907,
+      "minimum_s": 300.0,
+      "samples_s": [
+        360.0,
+        300.0,
+        300.0,
+        300.0,
+        300.0,
+        300.0,
+        300.0,
+        300.0,
+        300.0,
+        300.0,
+        300.0,
+        300.0,
+        300.0,
+        300.0,
+        300.0,
+        300.0,
+        300.0,
+        300.0,
+        360.0,
+        300.0,
+        360.0,
+        360.0,
+        300.0,
+        360.0,
+        360.0,
+        360.0,
+        360.0,
+        360.0,
+        360.0,
+        360.0,
+        360.0,
+        360.0,
+        480.0
+      ]
+    },
+    "on_duration_distribution": {
+      "count": 34,
+      "maximum_s": 17520.0,
+      "mean_s": 1316.3036882087563,
+      "minimum_s": 520.0,
+      "samples_s": [
+        17520.0,
+        840.0,
+        900.0,
+        900.0,
+        900.0,
+        840.0,
+        900.0,
+        840.0,
+        840.0,
+        840.0,
+        840.0,
+        780.0,
+        840.0,
+        780.0,
+        840.0,
+        780.0,
+        780.0,
+        780.0,
+        780.0,
+        900.0,
+        780.0,
+        900.0,
+        840.0,
+        780.0,
+        840.0,
+        840.0,
+        900.0,
+        840.0,
+        840.0,
+        840.0,
+        780.0,
+        840.0,
+        794.3253990977174,
+        520.0
+      ]
+    },
+    "regime_time_s": {
+      "battery_assisted": 1500.0,
+      "continuous_engine": 16020.0,
+      "cycling": 38094.32539909772
+    },
+    "requested_on_power_range": {
+      "maximum_kw": 86.7791369750147,
+      "minimum_kw": 27.139989994975664
+    },
+    "restart_count": 33,
+    "total_engine_off_fraction": 0.19527342860075744
+  },
+  "experiment": {
+    "classification": "integration reference, not calibrated or optimised",
+    "name": "uncalibrated_causal_thermostat_reference",
+    "reference_design_is_ga_optimised": false
+  },
+  "failures": {
+    "controller_infeasible": false,
+    "failure_flags": [
+      "engine_power_limited",
+      "battery_rate_limited"
+    ],
+    "hard_dwell_infeasible": false,
+    "hard_dwell_violation_count": 0,
+    "plant_infeasible": false
+  },
+  "fuel": {
+    "initial_kg": 288.6101983109414,
+    "remaining_kg": 6.112466123543756,
+    "restart_kg": 0.0,
+    "running_kg": 282.4977321873979,
+    "total_consumed_kg": 282.4977321873977
+  },
+  "mission": {
+    "descent_and_landing_completed": true,
+    "loiter_time_s": 49274.32539909772,
+    "mission_complete": true,
+    "phase_durations_s": {
+      "climb": 1500.0,
+      "cruise": 3600.0,
+      "descent": 1000.0,
+      "landing": 120.0,
+      "loiter": 49274.32539909772,
+      "takeoff": 120.0
+    },
+    "reserve_shortfall_kg": 0.0,
+    "termination_reason": "fuel_reserve",
+    "total_time_s": 55614.32539909772
+  }
+}

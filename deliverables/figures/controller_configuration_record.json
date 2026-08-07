@@ -1,0 +1,105 @@
+{
+  "aircraft": {
+    "battery_capacity_kwh": 10.0,
+    "cruise_altitude_m": 3000.0,
+    "dry_mass_kg": 711.3898016890586,
+    "engine_rated_power_kw": 86.7791369750147,
+    "initial_fuel_kg": 288.6101983109414,
+    "mtow_kg": 1000.0,
+    "wing_area_m2": 7.59175537062125
+  },
+  "local_verification": {
+    "candidate_count": 12,
+    "event_time_ties": {
+      "fixed": [
+        "fixed:r=1.100",
+        "fixed:r=1.200"
+      ],
+      "pi": [
+        "pi:r=1.300:kp=2.500"
+      ]
+    },
+    "fixed_s_ratio_resolution": 0.1,
+    "original_artifacts_found": false,
+    "pi_kp_resolution": 2.5,
+    "pi_s0_ratio_resolution": 0.1,
+    "selection_rule": "feasibility, endurance, then fewer restarts; stable candidate order for exact ties"
+  },
+  "selected": {
+    "adaptive_pi_ecms": {
+      "base_anchor": "switching_s",
+      "base_equivalence_factor": null,
+      "class": "PIECMS",
+      "controller_family": "pi",
+      "engine_allow_shutdown": true,
+      "engine_min_power_fraction": 0.15,
+      "equivalence_factor_clamp": [
+        0.5,
+        20.0
+      ],
+      "integral_action": false,
+      "kp": 2.5,
+      "minimum_off_time_s": null,
+      "minimum_on_time_s": null,
+      "mission_timestep_s": 60.0,
+      "neutral_s_role": "diagnostic_only",
+      "restart_fuel_kg_per_start": 0.0,
+      "s0_ratio": 1.3,
+      "soc_ref": 0.6
+    },
+    "fixed_s_ecms": {
+      "adaptation_enabled": false,
+      "class": "FixedECMS",
+      "controller_family": "fixed",
+      "engine_allow_shutdown": true,
+      "engine_min_power_fraction": 0.15,
+      "equivalence_factor_clamp": [
+        0.5,
+        20.0
+      ],
+      "minimum_off_time_s": null,
+      "minimum_on_time_s": null,
+      "mission_timestep_s": 60.0,
+      "ratio_anchor": "switching_s",
+      "restart_fuel_kg_per_start": 0.0,
+      "s": null,
+      "s_ratio": 1.1
+    },
+    "optimised_thermostat": {
+      "class": "ThermostatParameters",
+      "controller_family": "thermostat",
+      "dwell_semantics": "hard",
+      "engine_allow_shutdown": true,
+      "engine_min_power_fraction": 0.15,
+      "engine_on_power_kw": null,
+      "engine_on_power_rule": "existing maximum-feasible selection",
+      "initial_elapsed_in_state_s": 60.0,
+      "initial_engine_on": true,
+      "minimum_off_time_s": 60.0,
+      "minimum_on_time_s": 60.0,
+      "mission_timestep_s": 60.0,
+      "restart_fuel_kg_per_start": 0.0,
+      "soc_high": 0.3,
+      "soc_low": 0.225,
+      "terminal_strategy": "causal"
+    },
+    "untuned_thermostat": {
+      "class": "ThermostatParameters",
+      "controller_family": "thermostat",
+      "dwell_semantics": "hard",
+      "engine_allow_shutdown": true,
+      "engine_min_power_fraction": 0.15,
+      "engine_on_power_kw": null,
+      "engine_on_power_rule": "existing maximum-feasible selection",
+      "initial_elapsed_in_state_s": 60.0,
+      "initial_engine_on": true,
+      "minimum_off_time_s": 60.0,
+      "minimum_on_time_s": 60.0,
+      "mission_timestep_s": 60.0,
+      "restart_fuel_kg_per_start": 0.0,
+      "soc_high": 0.6,
+      "soc_low": 0.4,
+      "terminal_strategy": "causal"
+    }
+  }
+}

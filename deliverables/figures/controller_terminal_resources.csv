@@ -1,0 +1,4 @@
+controller_key,controller,final_soc,fuel_remaining_kg,mandatory_reserve_kg,fuel_above_reserve_kg
+fixed_s_ecms,Tuned fixed-(s) ECMS,0.09596015738129089,5.446433142071789,5.0,0.44643314207178886
+adaptive_pi_ecms,Tuned adaptive PI-ECMS,0.07670040494765434,5.560914034146909,5.0,0.5609140341469088
+optimised_thermostat,Optimised thermostat,0.22035789264692873,5.5078150370516985,5.0,0.5078150370516985

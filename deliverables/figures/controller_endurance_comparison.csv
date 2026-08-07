@@ -1,0 +1,5 @@
+controller_key,controller,role,endurance_s,endurance_h,delta_from_best_s,delta_from_best_min
+fixed_s_ecms,Tuned fixed-(s) ECMS,tuned,56413.909717900184,15.670530477194495,-22.6064786001225,-0.376774643335375
+adaptive_pi_ecms,Tuned adaptive PI-ECMS,tuned,56436.516196500306,15.676810054583418,0.0,0.0
+optimised_thermostat,Optimised thermostat,tuned,56094.32539909772,15.581757055304921,-342.19079740258894,-5.703179956709816
+untuned_thermostat,"Untuned thermostat (0.4, 0.6)",development_reference,55614.32539909772,15.448423721971588,-822.1907974025889,-13.703179956709816

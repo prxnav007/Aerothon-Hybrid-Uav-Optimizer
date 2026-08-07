@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, fields, replace
 from typing import TYPE_CHECKING, Any
 
 from src.control.base import ControlContext, EMSController, neutral_equivalence_factor
@@ -18,6 +18,13 @@ from src.control.power_split import (
     SplitDecision,
     solve_split,
     switching_equivalence_factor,
+)
+from src.control.thermostat import (
+    TerminalStrategy,
+    ThermostatCommand,
+    ThermostatParameters,
+    ThermostatState,
+    schedule_thermostat,
 )
 from src.models import aerodynamics
 from src.models.atmosphere import atmosphere, g0
@@ -124,6 +131,18 @@ class TimeStep:
     source_losses_kw: float
     demand_losses_kw: float
     propeller_losses_kw: float
+    requested_engine_on: bool | None = None
+    requested_engine_shaft_kw: float | None = None
+    controller_regime: str | None = None
+    controller_regime_reason: str | None = None
+    controller_active_constraint: str | None = None
+    thermostat_elapsed_in_state_s: float | None = None
+    thermostat_restart_count: int | None = None
+    thermostat_transitioned: bool = False
+    thermostat_dwell_violation: bool = False
+    battery_active_limit: str = "none"
+    controller_feasible: bool = True
+    plant_feasible: bool = True
 
 
 @dataclass(frozen=True)
@@ -143,6 +162,7 @@ class MissionResult:
     mean_system_efficiency: float
     failure_flags: tuple[str, ...]
     log: tuple[TimeStep, ...] | None
+    thermostat_final_state: ThermostatState | None = None
 
 
 @dataclass(frozen=True)
@@ -175,7 +195,9 @@ class _Dispatch:
     switching_s: float
     equivalence_factor: float
     max_bus_kw: float
+    requested_engine_shaft_kw: float
     split: SplitDecision
+    thermostat_command: ThermostatCommand | None = None
 
 
 def _speed_for_phase(
@@ -316,8 +338,129 @@ def _dispatch(
         switching_s=switching_s,
         equivalence_factor=factor,
         max_bus_kw=max_bus_kw,
+        requested_engine_shaft_kw=split.engine_shaft_kw,
         split=split,
     )
+
+
+def _thermostat_dispatch(
+    aircraft: Aircraft,
+    phase: Phase,
+    parameters: ThermostatParameters,
+    state: ThermostatState,
+    *,
+    altitude_m: float,
+    mass_kg: float,
+    soc: float,
+    climb_rate_mps: float,
+    dt_s: float,
+) -> _Dispatch:
+    atmospheric = atmosphere(altitude_m)
+    weight_n = mass_kg * g0
+    speed_mps = _speed_for_phase(
+        phase, aircraft, weight_n, atmospheric.density_kg_m3
+    )
+    aerodynamic = aerodynamics.evaluate(
+        weight_n,
+        atmospheric.density_kg_m3,
+        speed_mps,
+        aircraft.wing_area_m2,
+        aircraft.cd0,
+        aircraft.aspect_ratio,
+        aircraft.oswald_efficiency,
+        aircraft.propeller_efficiency,
+        climb_rate_mps=climb_rate_mps,
+    )
+    shaft_power_kw = float(aerodynamic.shaft_power_w) / 1000.0
+    bus_demand_kw = float(aircraft.powertrain.bus_power_required(shaft_power_kw))
+    command = schedule_thermostat(
+        parameters,
+        state,
+        demand_bus_kw=bus_demand_kw,
+        soc=soc,
+        sigma=atmospheric.density_ratio,
+        dt_s=dt_s,
+        engine=aircraft.engine,
+        battery=aircraft.battery,
+        powertrain=aircraft.powertrain,
+    )
+    bus_from_engine_kw = float(
+        aircraft.powertrain.bus_power_from_engine(command.requested_engine_shaft_kw)
+    )
+    battery_bus_kw = bus_demand_kw - bus_from_engine_kw
+    split = SplitDecision(
+        engine_shaft_kw=command.requested_engine_shaft_kw,
+        bus_from_engine_kw=bus_from_engine_kw,
+        battery_bus_kw=battery_bus_kw,
+        battery_internal_kw=aircraft.battery.internal_power_kw(
+            battery_bus_kw, soc, dt_s
+        ),
+        fuel_flow_kg_s=0.0,
+        hamiltonian_kg_s=math.nan,
+        feasible=command.feasible,
+        engine_off=not command.requested_engine_on,
+        engine_at_idle=False,
+        active_bound=command.active_constraint,
+    )
+    max_bus_kw = float(
+        aircraft.powertrain.bus_power_from_engine(
+            aircraft.engine.max_power_kw(atmospheric.density_ratio)
+        )
+    ) + aircraft.battery.available_discharge_kw(soc, dt_s)
+    return _Dispatch(
+        atmospheric=atmospheric,
+        speed_mps=speed_mps,
+        aerodynamic=aerodynamic,
+        shaft_power_kw=shaft_power_kw,
+        bus_demand_kw=bus_demand_kw,
+        neutral_s=math.nan,
+        switching_s=math.nan,
+        equivalence_factor=math.nan,
+        max_bus_kw=max_bus_kw,
+        requested_engine_shaft_kw=command.requested_engine_shaft_kw,
+        split=split,
+        thermostat_command=command,
+    )
+
+
+def _resolve_thermostat_plant(
+    aircraft: Aircraft,
+    dispatch: _Dispatch,
+    engine_state: EngineState,
+    *,
+    soc: float,
+    dt_s: float,
+) -> _Dispatch:
+    command = dispatch.thermostat_command
+    if command is None:
+        return dispatch
+    bus_from_engine_kw = float(
+        aircraft.powertrain.bus_power_from_engine(engine_state.delivered_kw)
+    )
+    battery_bus_kw = dispatch.bus_demand_kw - bus_from_engine_kw
+    discharge_limit_kw = aircraft.battery.available_discharge_kw(soc, dt_s)
+    charge_limit_kw = aircraft.battery.available_charge_kw(soc, dt_s)
+    feasible = (
+        command.feasible
+        and battery_bus_kw <= discharge_limit_kw + _POWER_TOLERANCE_KW
+        and battery_bus_kw >= -charge_limit_kw - _POWER_TOLERANCE_KW
+        and command.requested_engine_on == (not engine_state.shut_down)
+    )
+    split = SplitDecision(
+        engine_shaft_kw=engine_state.delivered_kw,
+        bus_from_engine_kw=bus_from_engine_kw,
+        battery_bus_kw=battery_bus_kw,
+        battery_internal_kw=aircraft.battery.internal_power_kw(
+            battery_bus_kw, soc, dt_s
+        ),
+        fuel_flow_kg_s=engine_state.fuel_flow_kg_s,
+        hamiltonian_kg_s=math.nan,
+        feasible=feasible,
+        engine_off=engine_state.shut_down,
+        engine_at_idle=engine_state.at_idle,
+        active_bound=command.active_constraint,
+    )
+    return replace(dispatch, split=split)
 
 
 def _append_flag(flags: list[str], seen: set[str], flag: str) -> None:
@@ -359,18 +502,44 @@ def _battery_bound_flags(
 def run_mission(
     aircraft: Aircraft,
     mission: MissionProfile,
-    controller: EMSController,
+    controller: EMSController | None = None,
     split_solver: Callable[..., SplitDecision] = solve_split,
     dt_s: float = 60.0,
     phase_dt_s: dict[str, float] | None = None,
     initial_soc: float = 1.0,
     record_log: bool = False,
+    *,
+    thermostat_parameters: ThermostatParameters | None = None,
+    initial_thermostat_state: ThermostatState | None = None,
 ) -> MissionResult:
     """Fly ``mission`` deterministically and return outcomes and diagnostics."""
     default_dt_s = _finite_positive("dt_s", dt_s)
     initial_soc = float(initial_soc)
     if not math.isfinite(initial_soc) or not 0.0 <= initial_soc <= 1.0:
         raise ValueError(f"initial_soc must lie in [0, 1], got {initial_soc!r}")
+    thermostat_selected = thermostat_parameters is not None
+    if thermostat_selected == (controller is not None):
+        raise ValueError("select exactly one ECMS controller or thermostat scheduler")
+    if thermostat_selected:
+        assert thermostat_parameters is not None
+        if initial_thermostat_state is None:
+            raise ValueError("thermostat scheduling requires an explicit initial state")
+        if thermostat_parameters.terminal_strategy is not TerminalStrategy.CAUSAL:
+            raise ValueError("run_mission supports only causal thermostat scheduling")
+        if split_solver is not solve_split:
+            raise ValueError("split_solver is not used by thermostat scheduling")
+        if not math.isclose(
+            thermostat_parameters.restart_fuel_kg,
+            aircraft.engine.restart_fuel_kg,
+            rel_tol=0.0,
+            abs_tol=1.0e-12,
+        ):
+            raise ValueError(
+                "thermostat and engine restart_fuel_kg must match; "
+                "the simulator owns mission fuel accounting"
+            )
+    elif initial_thermostat_state is not None:
+        raise ValueError("initial_thermostat_state requires thermostat_parameters")
 
     phase_steps = {} if phase_dt_s is None else dict(phase_dt_s)
     unknown_phases = set(phase_steps).difference(mission.phase_names)
@@ -397,7 +566,10 @@ def run_mission(
     resource_reason: str | None = None
     terminal_failure = False
     all_phases_completed = True
-    engine_was_shut_down = False
+    thermostat_state = initial_thermostat_state
+    engine_was_shut_down = (
+        not thermostat_state.engine_on if thermostat_state is not None else False
+    )
 
     if initial_fuel_kg <= 0.0:
         _append_flag(flags, seen_flags, "fuel_exhausted")
@@ -524,24 +696,49 @@ def run_mission(
             restart_fuel_kg = 0.0
             fuel_boundary_prevents_step = False
             for _ in range(6):
-                dispatch = _dispatch(
+                if thermostat_selected:
+                    assert thermostat_parameters is not None
+                    assert thermostat_state is not None
+                    dispatch = _thermostat_dispatch(
+                        aircraft,
+                        phase,
+                        thermostat_parameters,
+                        thermostat_state,
+                        altitude_m=altitude_m,
+                        mass_kg=mass_kg,
+                        soc=soc,
+                        climb_rate_mps=climb_rate_mps,
+                        dt_s=step_dt_s,
+                    )
+                else:
+                    assert controller is not None
+                    dispatch = _dispatch(
+                        aircraft,
+                        phase,
+                        controller,
+                        split_solver,
+                        time_s=time_s,
+                        altitude_m=altitude_m,
+                        mass_kg=mass_kg,
+                        soc=soc,
+                        climb_rate_mps=climb_rate_mps,
+                        dt_s=step_dt_s,
+                    )
+                if not dispatch.split.feasible:
+                    break
+                engine_state = aircraft.engine.operate(
+                    dispatch.requested_engine_shaft_kw,
+                    dispatch.atmospheric.density_ratio,
+                )
+                dispatch = _resolve_thermostat_plant(
                     aircraft,
-                    phase,
-                    controller,
-                    split_solver,
-                    time_s=time_s,
-                    altitude_m=altitude_m,
-                    mass_kg=mass_kg,
+                    dispatch,
+                    engine_state,
                     soc=soc,
-                    climb_rate_mps=climb_rate_mps,
                     dt_s=step_dt_s,
                 )
                 if not dispatch.split.feasible:
                     break
-                engine_state = aircraft.engine.operate(
-                    dispatch.split.engine_shaft_kw,
-                    dispatch.atmospheric.density_ratio,
-                )
                 restart_fuel_kg = (
                     aircraft.engine.restart_fuel_kg
                     if engine_was_shut_down and not engine_state.shut_down
@@ -578,6 +775,13 @@ def run_mission(
                     all_phases_completed = False
                 break
             if not dispatch.split.feasible:
+                if dispatch.thermostat_command is not None:
+                    _append_flag(flags, seen_flags, "controller_infeasible")
+                    if (
+                        dispatch.thermostat_command.active_constraint
+                        == "hard_off_dwell"
+                    ):
+                        _append_flag(flags, seen_flags, "hard_dwell_infeasible")
                 _append_flag(flags, seen_flags, "power_shortfall")
                 termination_reason = "power_shortfall"
                 terminal_failure = True
@@ -641,6 +845,8 @@ def run_mission(
                 fuel_remaining_kg = mission.loiter_fuel_floor_kg
             soc = battery_state.soc
             engine_was_shut_down = engine_state.shut_down
+            if dispatch.thermostat_command is not None:
+                thermostat_state = dispatch.thermostat_command.next_state
             altitude_m += climb_rate_mps * step_dt_s
             if phase.termination is Termination.ALTITUDE:
                 if (
@@ -734,6 +940,48 @@ def run_mission(
                         source_losses_kw=source_losses_kw,
                         demand_losses_kw=demand_losses_kw,
                         propeller_losses_kw=propeller_losses_kw,
+                        requested_engine_on=(
+                            dispatch.thermostat_command.requested_engine_on
+                            if dispatch.thermostat_command is not None
+                            else None
+                        ),
+                        requested_engine_shaft_kw=(
+                            dispatch.requested_engine_shaft_kw
+                            if dispatch.thermostat_command is not None
+                            else None
+                        ),
+                        controller_regime=(
+                            dispatch.thermostat_command.regime.value
+                            if dispatch.thermostat_command is not None
+                            else None
+                        ),
+                        controller_regime_reason=(
+                            dispatch.thermostat_command.regime_reason
+                            if dispatch.thermostat_command is not None
+                            else None
+                        ),
+                        controller_active_constraint=dispatch.split.active_bound,
+                        thermostat_elapsed_in_state_s=(
+                            dispatch.thermostat_command.next_state.elapsed_in_state_s
+                            if dispatch.thermostat_command is not None
+                            else None
+                        ),
+                        thermostat_restart_count=(
+                            dispatch.thermostat_command.next_state.restart_count
+                            if dispatch.thermostat_command is not None
+                            else None
+                        ),
+                        thermostat_transitioned=(
+                            dispatch.thermostat_command.transitioned
+                            if dispatch.thermostat_command is not None
+                            else False
+                        ),
+                        thermostat_dwell_violation=(
+                            dispatch.thermostat_command.dwell_violation
+                            if dispatch.thermostat_command is not None
+                            else False
+                        ),
+                        battery_active_limit=battery_state.active_limit,
                     )
                 )
 
@@ -774,6 +1022,7 @@ def run_mission(
         mean_system_efficiency=mean_efficiency,
         failure_flags=tuple(flags),
         log=None if log_entries is None else tuple(log_entries),
+        thermostat_final_state=thermostat_state,
     )
 
 

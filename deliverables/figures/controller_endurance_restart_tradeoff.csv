@@ -1,0 +1,4 @@
+controller_key,controller,restart_count,endurance_s,endurance_h,pareto_optimal
+fixed_s_ecms,Tuned fixed-(s) ECMS,179,56413.909717900184,15.670530477194495,True
+adaptive_pi_ecms,Tuned adaptive PI-ECMS,182,56436.516196500306,15.676810054583418,True
+optimised_thermostat,Optimised thermostat,81,56094.32539909772,15.581757055304921,True

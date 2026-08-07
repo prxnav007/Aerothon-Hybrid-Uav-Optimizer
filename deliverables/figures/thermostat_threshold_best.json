@@ -1,0 +1,159 @@
+{
+  "artifacts": {
+    "phase_ledger_csv": "C:\\Aerothon-Hybrid-Uav-Optimizer\\deliverables\\figures\\thermostat_threshold_phase_ledger.csv",
+    "search_csv": "C:\\Aerothon-Hybrid-Uav-Optimizer\\deliverables\\figures\\thermostat_threshold_search.csv"
+  },
+  "bound_status": {
+    "minimum_separation_active": false,
+    "soc_high_at_bound": false,
+    "soc_low_at_bound": false
+  },
+  "classification": "best feasible pair within stated bounds and search resolution",
+  "comparison": {
+    "best_global_thermostat": {
+      "candidate_id": "0.225000000:0.300000000",
+      "constraint_encounters_json": "{\"battery\": {\"charge:legacy_power\": {\"duration_s\": 27374.325399097717, \"steps\": 457}}, \"controller\": {\"battery_cannot_carry_full_demand\": {\"duration_s\": 16020.0, \"steps\": 267}, \"battery_charge_limit\": {\"duration_s\": 38574.32539909772, \"steps\": 644}, \"engine_max\": {\"duration_s\": 1500.0, \"steps\": 25}}}",
+      "descent_landing_completed": true,
+      "discrete_energy_residual_fraction": 1.3416890733937867e-16,
+      "energy_ledger_residual_kwh": -0.7858634770686876,
+      "failure_flags_json": "[\"engine_power_limited\", \"battery_rate_limited\"]",
+      "feasibility_reasons_json": "[]",
+      "feasible": true,
+      "final_soc": 0.22035789264692873,
+      "final_stored_energy_kwh": 1.958149938190525,
+      "fuel_consumed_kg": 283.10238327388976,
+      "fuel_ledger_residual_kg": -2.2737367544323206e-13,
+      "fuel_remaining_kg": 5.5078150370516985,
+      "loiter_engine_off_fraction": 0.21827248008867473,
+      "loiter_restarts_per_hour": 5.716085942653692,
+      "loiter_time_s": 49754.32539909772,
+      "maximum_engine_on_power_kw": 86.7791369750147,
+      "maximum_power_balance_residual_kw": 1.2434497875801753e-13,
+      "mean_engine_on_power_kw": 41.36494117971371,
+      "minimum_bus_supply_margin_kw": 17.700723984206064,
+      "minimum_engine_on_power_kw": 27.139989994975664,
+      "minimum_soc": 0.17966161710819917,
+      "minimum_transition_margin_s": 0.0,
+      "mission_complete": true,
+      "overall_engine_off_fraction": 0.19966369004912132,
+      "reserve_shortfall_kg": 0.0,
+      "restart_count": 81,
+      "runtime_s": 0.5949997999705374,
+      "soc_high": 0.3,
+      "soc_low": 0.225,
+      "stage": "refine",
+      "termination_reason": "fuel_reserve",
+      "total_time_s": 56094.32539909772
+    },
+    "frozen_pi_ecms": {
+      "final_soc": 0.10240932167286913,
+      "fuel_remaining_kg": 5.442922783353511,
+      "loiter_time_s": 49842.85487028608,
+      "minimum_soc": 0.05000527247581649,
+      "restart_count": 180,
+      "termination_reason": "fuel_reserve",
+      "total_time_s": 56182.85487028608
+    },
+    "untuned_thermostat": {
+      "candidate_id": "0.400000000:0.600000000",
+      "constraint_encounters_json": "{\"battery\": {\"charge:legacy_power\": {\"duration_s\": 27234.325399097717, \"steps\": 455}}, \"controller\": {\"battery_cannot_carry_full_demand\": {\"duration_s\": 16020.0, \"steps\": 267}, \"battery_charge_limit\": {\"duration_s\": 38094.32539909772, \"steps\": 636}, \"engine_max\": {\"duration_s\": 1500.0, \"steps\": 25}}}",
+      "descent_landing_completed": true,
+      "discrete_energy_residual_fraction": 1.344560791158317e-16,
+      "energy_ledger_residual_kwh": -0.6633774764900409,
+      "failure_flags_json": "[\"engine_power_limited\", \"battery_rate_limited\"]",
+      "feasibility_reasons_json": "[]",
+      "feasible": true,
+      "final_soc": 0.5187794330353487,
+      "final_stored_energy_kwh": 4.831155283360815,
+      "fuel_consumed_kg": 282.4977321873977,
+      "fuel_ledger_residual_kg": -2.2737367544323206e-13,
+      "fuel_remaining_kg": 6.112466123543756,
+      "loiter_engine_off_fraction": 0.21065737411780117,
+      "loiter_restarts_per_hour": 2.3379315509027645,
+      "loiter_time_s": 49274.32539909772,
+      "maximum_engine_on_power_kw": 86.7791369750147,
+      "maximum_power_balance_residual_kw": 2.0250467969162855e-13,
+      "mean_engine_on_power_kw": 41.4270994330123,
+      "minimum_bus_supply_margin_kw": 17.700723984206064,
+      "minimum_engine_on_power_kw": 27.139989994975664,
+      "minimum_soc": 0.35323007103028303,
+      "minimum_transition_margin_s": 240.0,
+      "mission_complete": true,
+      "overall_engine_off_fraction": 0.19527342860075744,
+      "reserve_shortfall_kg": 0.0,
+      "restart_count": 33,
+      "runtime_s": 0.4210202000103891,
+      "soc_high": 0.6,
+      "soc_low": 0.4,
+      "stage": "reference",
+      "termination_reason": "fuel_reserve",
+      "total_time_s": 55614.32539909772
+    }
+  },
+  "endurance_recovery": {
+    "original_deficit_s": 568.5294711883615,
+    "recovered_fraction": 0.844283408908752,
+    "recovered_s": 480.0,
+    "remaining_deficit_s": 88.52947118836152
+  },
+  "loiter_termination": {
+    "active_threshold_kg": 9.7,
+    "pi_entry_soc": 0.5931880693214574,
+    "pi_exit_fuel_kg": 9.7,
+    "pi_exit_soc": 0.06367471452871735,
+    "pi_loiter_energy_change_kwh": -5.035568207244921,
+    "pi_loiter_fuel_kg": 233.7019891736088,
+    "pi_loiter_mean_fuel_rate_kg_h": 16.879594140715056,
+    "thresholds_agree": true,
+    "untuned_entry_soc": 0.6695007762201075,
+    "untuned_exit_fuel_kg": 9.7,
+    "untuned_exit_soc": 0.5749302049204896,
+    "untuned_loiter_energy_change_kwh": -0.9787285380387392,
+    "untuned_loiter_fuel_kg": 233.4123569839875,
+    "untuned_loiter_mean_fuel_rate_kg_h": 17.05319105510761
+  },
+  "one_step_extension": {
+    "descent_landing_completed": true,
+    "extra_step_fuel_kg": 0.34339808842887365,
+    "feasible": false,
+    "final_fuel_kg": 4.899967567266739,
+    "final_soc": 0.2863042030759201,
+    "fuel_after_extra_step_kg": 9.356601911571126,
+    "reason": "fuel_reserve_shortfall",
+    "reproduced_base_loiter_s": 49754.32539909772,
+    "requested_extension_s": 60.0,
+    "reserve_margin_kg": -0.10003243273326134,
+    "soc_after_extra_step": 0.21919735212783492,
+    "termination_reason": "fuel_reserve_shortfall"
+  },
+  "phase_dependent_gate": {
+    "conflict_candidate_ids": [],
+    "global_candidate_feasible": true,
+    "justified": false,
+    "one_step_extension_feasible": false,
+    "phase_specific_conflict": false,
+    "rationale": "the feasible global band leaves no demonstrated phase-specific conflict"
+  },
+  "search": {
+    "bounds": {
+      "minimum_separation": 0.05,
+      "soc_high_maximum": 1.0,
+      "soc_low_minimum": 0.05
+    },
+    "checkpoint_path": "C:\\Aerothon-Hybrid-Uav-Optimizer\\deliverables\\figures\\thermostat_threshold_search.csv",
+    "coarse_candidate_count": 56,
+    "completed_evaluations": 72,
+    "maximum_evaluations": 72,
+    "refinement_step": 0.025,
+    "tied_best_candidate_ids": [
+      "0.225000000:0.300000000"
+    ]
+  },
+  "terminal_energy": {
+    "best_final_stored_energy_kwh": 1.958149938190525,
+    "best_usable_energy_slack_kwh": 1.5260070810476678,
+    "floor_stored_energy_kwh": 0.43214285714285716,
+    "initial_stored_energy_kwh": 10.0
+  },
+  "winner_repeat_deterministic": true
+}

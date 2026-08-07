@@ -1,0 +1,1395 @@
+{
+  "aircraft": {
+    "aspect_ratio": 22.644481390865387,
+    "battery_capacity_kwh": 8.343141144862464,
+    "cd0": 0.025369266815181323,
+    "dry_mass_kg": 735.6078702605156,
+    "engine_rating_kw": 83.40205998293928,
+    "initial_fuel_kg": 264.39212973948446,
+    "soc_gap": 0.4190060110903722,
+    "soc_high": 0.6274222947688504,
+    "soc_low": 0.20841628367847814,
+    "span_m": 14.293887141340022,
+    "wing_area_m2": 9.022737420331685
+  },
+  "best_objective_by_generation": [
+    {
+      "best_feasible_objective_seconds": 48536.880130153375,
+      "generation": 0
+    },
+    {
+      "best_feasible_objective_seconds": 48536.880130153375,
+      "generation": 1
+    },
+    {
+      "best_feasible_objective_seconds": 48536.880130153375,
+      "generation": 2
+    },
+    {
+      "best_feasible_objective_seconds": 49256.37521554405,
+      "generation": 3
+    },
+    {
+      "best_feasible_objective_seconds": 49327.8586993588,
+      "generation": 4
+    },
+    {
+      "best_feasible_objective_seconds": 49722.87942910312,
+      "generation": 5
+    },
+    {
+      "best_feasible_objective_seconds": 50887.77444022566,
+      "generation": 6
+    },
+    {
+      "best_feasible_objective_seconds": 51359.68687992803,
+      "generation": 7
+    },
+    {
+      "best_feasible_objective_seconds": 51677.61810908875,
+      "generation": 8
+    },
+    {
+      "best_feasible_objective_seconds": 51677.61810908875,
+      "generation": 9
+    },
+    {
+      "best_feasible_objective_seconds": 51902.5724502789,
+      "generation": 10
+    },
+    {
+      "best_feasible_objective_seconds": 52085.16037996038,
+      "generation": 11
+    },
+    {
+      "best_feasible_objective_seconds": 52150.02089784311,
+      "generation": 12
+    },
+    {
+      "best_feasible_objective_seconds": 52302.676505445364,
+      "generation": 13
+    },
+    {
+      "best_feasible_objective_seconds": 52302.676505445364,
+      "generation": 14
+    },
+    {
+      "best_feasible_objective_seconds": 53433.7053142426,
+      "generation": 15
+    },
+    {
+      "best_feasible_objective_seconds": 53607.03845062409,
+      "generation": 16
+    },
+    {
+      "best_feasible_objective_seconds": 53757.16588078054,
+      "generation": 17
+    },
+    {
+      "best_feasible_objective_seconds": 53832.08499637987,
+      "generation": 18
+    },
+    {
+      "best_feasible_objective_seconds": 53855.22890201043,
+      "generation": 19
+    },
+    {
+      "best_feasible_objective_seconds": 53948.55100140328,
+      "generation": 20
+    },
+    {
+      "best_feasible_objective_seconds": 54000.0,
+      "generation": 21
+    },
+    {
+      "best_feasible_objective_seconds": 54167.25971605903,
+      "generation": 22
+    },
+    {
+      "best_feasible_objective_seconds": 54171.84403206955,
+      "generation": 23
+    },
+    {
+      "best_feasible_objective_seconds": 54171.84403206955,
+      "generation": 24
+    },
+    {
+      "best_feasible_objective_seconds": 54171.84403206955,
+      "generation": 25
+    },
+    {
+      "best_feasible_objective_seconds": 54171.84403206955,
+      "generation": 26
+    },
+    {
+      "best_feasible_objective_seconds": 54241.95709160702,
+      "generation": 27
+    },
+    {
+      "best_feasible_objective_seconds": 54279.65645214104,
+      "generation": 28
+    },
+    {
+      "best_feasible_objective_seconds": 54279.65645214104,
+      "generation": 29
+    },
+    {
+      "best_feasible_objective_seconds": 54656.696984144124,
+      "generation": 30
+    },
+    {
+      "best_feasible_objective_seconds": 54656.696984144124,
+      "generation": 31
+    },
+    {
+      "best_feasible_objective_seconds": 54656.696984144124,
+      "generation": 32
+    },
+    {
+      "best_feasible_objective_seconds": 54697.503211681935,
+      "generation": 33
+    },
+    {
+      "best_feasible_objective_seconds": 54697.58120358871,
+      "generation": 34
+    },
+    {
+      "best_feasible_objective_seconds": 54798.121719723094,
+      "generation": 35
+    },
+    {
+      "best_feasible_objective_seconds": 54848.22915899992,
+      "generation": 36
+    },
+    {
+      "best_feasible_objective_seconds": 54881.83573323673,
+      "generation": 37
+    },
+    {
+      "best_feasible_objective_seconds": 54927.87406455872,
+      "generation": 38
+    },
+    {
+      "best_feasible_objective_seconds": 54927.87406455872,
+      "generation": 39
+    }
+  ],
+  "bound_pinning_within_one_percent": [],
+  "claim": "best feasible design found by this one-seed GA run",
+  "constraint_pinning_within_one_percent": {
+    "dynamic": [
+      {
+        "name": "mission_log_present",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "relative_margin": 0.0,
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/simulator.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "six_phase_order",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "relative_margin": 0.0,
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/mission.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "takeoff_completed",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "relative_margin": 0.0,
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/mission.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "climb_completed",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "relative_margin": 0.0,
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/mission.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "cruise_completed",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "relative_margin": 0.0,
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/mission.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "loiter_entered",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "relative_margin": 0.0,
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/mission.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "loiter_completed",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "relative_margin": 0.0,
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/mission.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "descent_completed",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "relative_margin": 0.0,
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/mission.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "landing_completed",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "relative_margin": 0.0,
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/mission.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "mission_complete",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "relative_margin": 0.0,
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/simulator.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "controller_feasible",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 0.0,
+        "raw_violation": 0.0,
+        "relationship": "at_most",
+        "relative_margin": 0.0,
+        "required_or_allowed": 0.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "control/thermostat.py",
+        "tolerance": 0.0,
+        "unit": "count"
+      },
+      {
+        "name": "plant_feasible",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 0.0,
+        "raw_violation": 0.0,
+        "relationship": "at_most",
+        "relative_margin": 0.0,
+        "required_or_allowed": 0.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/simulator.py",
+        "tolerance": 0.0,
+        "unit": "count"
+      },
+      {
+        "name": "hard_dwell",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 0.0,
+        "raw_violation": 0.0,
+        "relationship": "at_most",
+        "relative_margin": 0.0,
+        "required_or_allowed": 0.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "control/thermostat.py",
+        "tolerance": 0.0,
+        "unit": "count"
+      },
+      {
+        "name": "restart_accounting",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 0.0,
+        "raw_violation": 0.0,
+        "relationship": "at_most",
+        "relative_margin": 0.0,
+        "required_or_allowed": 0.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/simulator.py",
+        "tolerance": 1e-09,
+        "unit": "count"
+      },
+      {
+        "name": "terminal_failure_flags",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 0.0,
+        "raw_violation": 0.0,
+        "relationship": "at_most",
+        "relative_margin": 0.0,
+        "required_or_allowed": 0.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/simulator.py",
+        "tolerance": 0.0,
+        "unit": "count"
+      },
+      {
+        "name": "candidate_mission_exception",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 0.0,
+        "raw_violation": 0.0,
+        "relationship": "at_most",
+        "relative_margin": 0.0,
+        "required_or_allowed": 0.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "optimization/fitness.py",
+        "tolerance": 0.0,
+        "unit": "count"
+      },
+      {
+        "name": "bus_power_ledger",
+        "normalization_scale": 82.85082292965448,
+        "normalized_violation": 0.0,
+        "quantity": 9.237055564881302e-14,
+        "raw_violation": 0.0,
+        "relationship": "at_most",
+        "relative_margin": 1.2069885032747432e-08,
+        "required_or_allowed": 1e-06,
+        "satisfied": true,
+        "signed_margin": 9.999999076294443e-07,
+        "source": "simulation/simulator.py",
+        "tolerance": 0.0,
+        "unit": "kW"
+      },
+      {
+        "name": "fuel_ledger",
+        "normalization_scale": 264.39212973948446,
+        "normalized_violation": 0.0,
+        "quantity": 3.694822225952521e-13,
+        "raw_violation": 0.0,
+        "relationship": "at_most",
+        "relative_margin": 3.78086336670603e-12,
+        "required_or_allowed": 1e-09,
+        "satisfied": true,
+        "signed_margin": 9.996305177774048e-10,
+        "source": "simulation/simulator.py",
+        "tolerance": 0.0,
+        "unit": "kg"
+      },
+      {
+        "name": "discrete_energy_ledger",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 0.0,
+        "raw_violation": 0.0,
+        "relationship": "at_most",
+        "relative_margin": 1e-12,
+        "required_or_allowed": 1e-12,
+        "satisfied": true,
+        "signed_margin": 1e-12,
+        "source": "simulation/simulator.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      }
+    ],
+    "static": [
+      {
+        "margin": 0.013433922667161369,
+        "name": "cruise_engine_rating_with_margin",
+        "normalized_violation": 0.0,
+        "quantity": 83.40205998293928,
+        "relationship": "at_least",
+        "relative_margin": 0.00016110017998679485,
+        "required_or_allowed": 83.38862606027212,
+        "satisfied": true,
+        "source": "constraint_diagram.py CD-04",
+        "unit": "kW shaft SL"
+      }
+    ]
+  },
+  "constraints": {
+    "combined_normalized_violation": 0.0,
+    "dynamic": [
+      {
+        "name": "mission_log_present",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/simulator.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "six_phase_order",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/mission.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "takeoff_completed",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/mission.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "climb_completed",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/mission.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "cruise_completed",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/mission.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "loiter_entered",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/mission.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "loiter_completed",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/mission.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "descent_completed",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/mission.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "landing_completed",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/mission.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "mission_complete",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 1.0,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "required_or_allowed": 1.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/simulator.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      },
+      {
+        "name": "fuel_reserve",
+        "normalization_scale": 5.0,
+        "normalized_violation": 0.0,
+        "quantity": 7.1108440457862,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "required_or_allowed": 5.0,
+        "satisfied": true,
+        "signed_margin": 2.1108440457862,
+        "source": "simulation/mission.py",
+        "tolerance": 1e-10,
+        "unit": "kg"
+      },
+      {
+        "name": "soc_floor",
+        "normalization_scale": 0.95,
+        "normalized_violation": 0.0,
+        "quantity": 0.1649574711067965,
+        "raw_violation": 0.0,
+        "relationship": "at_least",
+        "required_or_allowed": 0.05,
+        "satisfied": true,
+        "signed_margin": 0.11495747110679651,
+        "source": "models/battery.py",
+        "tolerance": 1e-10,
+        "unit": "1"
+      },
+      {
+        "name": "controller_feasible",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 0.0,
+        "raw_violation": 0.0,
+        "relationship": "at_most",
+        "required_or_allowed": 0.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "control/thermostat.py",
+        "tolerance": 0.0,
+        "unit": "count"
+      },
+      {
+        "name": "plant_feasible",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 0.0,
+        "raw_violation": 0.0,
+        "relationship": "at_most",
+        "required_or_allowed": 0.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/simulator.py",
+        "tolerance": 0.0,
+        "unit": "count"
+      },
+      {
+        "name": "hard_dwell",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 0.0,
+        "raw_violation": 0.0,
+        "relationship": "at_most",
+        "required_or_allowed": 0.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "control/thermostat.py",
+        "tolerance": 0.0,
+        "unit": "count"
+      },
+      {
+        "name": "restart_accounting",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 0.0,
+        "raw_violation": 0.0,
+        "relationship": "at_most",
+        "required_or_allowed": 0.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/simulator.py",
+        "tolerance": 1e-09,
+        "unit": "count"
+      },
+      {
+        "name": "terminal_failure_flags",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 0.0,
+        "raw_violation": 0.0,
+        "relationship": "at_most",
+        "required_or_allowed": 0.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "simulation/simulator.py",
+        "tolerance": 0.0,
+        "unit": "count"
+      },
+      {
+        "name": "candidate_mission_exception",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 0.0,
+        "raw_violation": 0.0,
+        "relationship": "at_most",
+        "required_or_allowed": 0.0,
+        "satisfied": true,
+        "signed_margin": 0.0,
+        "source": "optimization/fitness.py",
+        "tolerance": 0.0,
+        "unit": "count"
+      },
+      {
+        "name": "bus_power_ledger",
+        "normalization_scale": 82.85082292965448,
+        "normalized_violation": 0.0,
+        "quantity": 9.237055564881302e-14,
+        "raw_violation": 0.0,
+        "relationship": "at_most",
+        "required_or_allowed": 1e-06,
+        "satisfied": true,
+        "signed_margin": 9.999999076294443e-07,
+        "source": "simulation/simulator.py",
+        "tolerance": 0.0,
+        "unit": "kW"
+      },
+      {
+        "name": "fuel_ledger",
+        "normalization_scale": 264.39212973948446,
+        "normalized_violation": 0.0,
+        "quantity": 3.694822225952521e-13,
+        "raw_violation": 0.0,
+        "relationship": "at_most",
+        "required_or_allowed": 1e-09,
+        "satisfied": true,
+        "signed_margin": 9.996305177774048e-10,
+        "source": "simulation/simulator.py",
+        "tolerance": 0.0,
+        "unit": "kg"
+      },
+      {
+        "name": "discrete_energy_ledger",
+        "normalization_scale": 1.0,
+        "normalized_violation": 0.0,
+        "quantity": 0.0,
+        "raw_violation": 0.0,
+        "relationship": "at_most",
+        "required_or_allowed": 1e-12,
+        "satisfied": true,
+        "signed_margin": 1e-12,
+        "source": "simulation/simulator.py",
+        "tolerance": 0.0,
+        "unit": "1"
+      }
+    ],
+    "static": [
+      {
+        "margin": 9.022737420331685,
+        "name": "positive_wing_area",
+        "normalized_violation": 0.0,
+        "quantity": 9.022737420331685,
+        "relationship": "at_least",
+        "required_or_allowed": 0.0,
+        "satisfied": true,
+        "source": "chromosome.py",
+        "unit": "m^2"
+      },
+      {
+        "margin": 22.644481390865387,
+        "name": "positive_aspect_ratio",
+        "normalized_violation": 0.0,
+        "quantity": 22.644481390865387,
+        "relationship": "at_least",
+        "required_or_allowed": 0.0,
+        "satisfied": true,
+        "source": "chromosome.py",
+        "unit": "1"
+      },
+      {
+        "margin": 83.40205998293928,
+        "name": "positive_engine_rating",
+        "normalized_violation": 0.0,
+        "quantity": 83.40205998293928,
+        "relationship": "at_least",
+        "required_or_allowed": 0.0,
+        "satisfied": true,
+        "source": "chromosome.py",
+        "unit": "kW"
+      },
+      {
+        "margin": 8.343141144862464,
+        "name": "positive_battery_capacity",
+        "normalized_violation": 0.0,
+        "quantity": 8.343141144862464,
+        "relationship": "at_least",
+        "required_or_allowed": 0.0,
+        "satisfied": true,
+        "source": "chromosome.py",
+        "unit": "kWh"
+      },
+      {
+        "margin": 5.560137332195952,
+        "name": "nonnegative_component_masses",
+        "normalized_violation": 0.0,
+        "quantity": 5.560137332195952,
+        "relationship": "at_least",
+        "required_or_allowed": 0.0,
+        "satisfied": true,
+        "source": "models/mass.py",
+        "unit": "kg"
+      },
+      {
+        "margin": 0.15841628367847815,
+        "name": "thermostat_soc_floor",
+        "normalized_violation": 0.0,
+        "quantity": 0.20841628367847814,
+        "relationship": "at_least",
+        "required_or_allowed": 0.05,
+        "satisfied": true,
+        "source": "chromosome.py",
+        "unit": "1"
+      },
+      {
+        "margin": 0.39158371632152184,
+        "name": "thermostat_soc_low_upper",
+        "normalized_violation": 0.0,
+        "quantity": 0.20841628367847814,
+        "relationship": "at_most",
+        "required_or_allowed": 0.6,
+        "satisfied": true,
+        "source": "chromosome.py",
+        "unit": "1"
+      },
+      {
+        "margin": 0.3225777052311496,
+        "name": "thermostat_soc_high_upper",
+        "normalized_violation": 0.0,
+        "quantity": 0.6274222947688504,
+        "relationship": "at_most",
+        "required_or_allowed": 0.95,
+        "satisfied": true,
+        "source": "chromosome.py",
+        "unit": "1"
+      },
+      {
+        "margin": 0.36900601109037223,
+        "name": "thermostat_minimum_gap",
+        "normalized_violation": 0.0,
+        "quantity": 0.4190060110903722,
+        "relationship": "at_least",
+        "required_or_allowed": 0.05,
+        "satisfied": true,
+        "source": "chromosome.py",
+        "unit": "1"
+      },
+      {
+        "margin": 1e-09,
+        "name": "mtow_mass_closure",
+        "normalized_violation": 0.0,
+        "quantity": 0.0,
+        "relationship": "at_most",
+        "required_or_allowed": 1e-09,
+        "satisfied": true,
+        "source": "models/mass.py",
+        "unit": "kg"
+      },
+      {
+        "margin": 244.39212973948446,
+        "name": "minimum_usable_fuel",
+        "normalized_violation": 0.0,
+        "quantity": 264.39212973948446,
+        "relationship": "at_least",
+        "required_or_allowed": 20.0,
+        "satisfied": true,
+        "source": "models/mass.py M-09",
+        "unit": "kg"
+      },
+      {
+        "margin": 98.31109142050701,
+        "name": "fuel_tank_volume",
+        "normalized_violation": 0.0,
+        "quantity": 328.84593251179655,
+        "relationship": "at_most",
+        "required_or_allowed": 427.15702393230356,
+        "satisfied": true,
+        "source": "models/mass.py M-06",
+        "unit": "L"
+      },
+      {
+        "margin": 3.1052226795607325,
+        "name": "stall_speed",
+        "normalized_violation": 0.0,
+        "quantity": 34.39477732043927,
+        "relationship": "at_most",
+        "required_or_allowed": 37.5,
+        "satisfied": true,
+        "source": "constraint_diagram.py CD-01",
+        "unit": "m/s"
+      },
+      {
+        "margin": 0.013433922667161369,
+        "name": "cruise_engine_rating_with_margin",
+        "normalized_violation": 0.0,
+        "quantity": 83.40205998293928,
+        "relationship": "at_least",
+        "required_or_allowed": 83.38862606027212,
+        "satisfied": true,
+        "source": "constraint_diagram.py CD-04",
+        "unit": "kW shaft SL"
+      },
+      {
+        "margin": 10.710621334984296,
+        "name": "climb_engine_rating_with_battery_and_margin",
+        "normalized_violation": 0.0,
+        "quantity": 83.40205998293928,
+        "relationship": "at_least",
+        "required_or_allowed": 72.69143864795498,
+        "satisfied": true,
+        "source": "constraint_diagram.py CD-04",
+        "unit": "kW shaft SL"
+      },
+      {
+        "margin": 75.71676363825017,
+        "name": "takeoff_combined_power_with_margin",
+        "normalized_violation": 0.0,
+        "quantity": 83.40205998293928,
+        "relationship": "at_least",
+        "required_or_allowed": 7.685296344689109,
+        "satisfied": true,
+        "source": "aerodynamics.py/powertrain.py",
+        "unit": "kW shaft SL"
+      },
+      {
+        "margin": 12.312809855195503,
+        "name": "battery_peak_discharge_sustainable_one_step",
+        "normalized_violation": 0.0,
+        "quantity": 25.029423434587393,
+        "relationship": "at_least",
+        "required_or_allowed": 12.71661357939189,
+        "satisfied": true,
+        "source": "models/battery.py B-06",
+        "unit": "kW bus"
+      },
+      {
+        "margin": -50.6355836442747,
+        "name": "service_ceiling_10km",
+        "normalized_violation": 0.3777713653718249,
+        "quantity": 83.40205998293928,
+        "relationship": "at_least",
+        "required_or_allowed": 134.03764362721398,
+        "satisfied": false,
+        "source": "constraint_diagram.py CD-02/O-12",
+        "unit": "kW shaft SL"
+      }
+    ]
+  },
+  "decoded_design": {
+    "aspect_ratio": 22.644481390865387,
+    "battery_capacity_kwh": 8.343141144862464,
+    "engine_rating_kw": 83.40205998293928,
+    "soc_high": 0.6274222947688504,
+    "soc_low": 0.20841628367847814,
+    "wing_area_m2": 9.022737420331685
+  },
+  "generation_zero_gate": {
+    "feasible_candidate_count": 11,
+    "initialization_counts": {
+      "ideal_perturbation": 7,
+      "ideal_seed": 1,
+      "latin_hypercube": 48,
+      "practical_perturbation": 7,
+      "practical_seed": 1
+    },
+    "passed": true,
+    "practical_reference_evaluation_key": "fitness-evaluation-v1:7ac61bea27fd0a2ab3d4cfe8e0db49d4cd6f77855dab729fc3224f1df6a5f025",
+    "reference_comparison": {
+      "final_fuel_kg": {
+        "absolute_tolerance": 1e-10,
+        "actual": 5.081139209846588,
+        "difference": 0.0,
+        "passed": true,
+        "target": 5.081139209846588
+      },
+      "final_soc": {
+        "absolute_tolerance": 1e-12,
+        "actual": 0.3636680823973519,
+        "difference": 0.0,
+        "passed": true,
+        "target": 0.3636680823973519
+      },
+      "minimum_soc": {
+        "absolute_tolerance": 1e-12,
+        "actual": 0.17802150457596896,
+        "difference": 0.0,
+        "passed": true,
+        "target": 0.17802150457596896
+      },
+      "objective_loiter_seconds": {
+        "absolute_tolerance": 1e-09,
+        "actual": 48536.880130153375,
+        "difference": 0.0,
+        "passed": true,
+        "target": 48536.880130153375
+      },
+      "restart_count": {
+        "absolute_tolerance": 0,
+        "actual": 50,
+        "difference": null,
+        "passed": true,
+        "target": 50
+      },
+      "termination_reason": {
+        "absolute_tolerance": 0,
+        "actual": "fuel_reserve",
+        "difference": null,
+        "passed": true,
+        "target": "fuel_reserve"
+      },
+      "total_mission_seconds": {
+        "absolute_tolerance": 1e-09,
+        "actual": 54876.880130153375,
+        "difference": 0.0,
+        "passed": true,
+        "target": 54876.880130153375
+      }
+    }
+  },
+  "mission": {
+    "controller_behavior": {
+      "charge_limit_encounter_count": 662,
+      "delivered_engine_power_range": {
+        "maximum_kw": 83.40205998293928,
+        "minimum_kw": 24.212011341180407
+      },
+      "discharge_limit_encounter_count": 0,
+      "loiter_engine_off_fraction": 0.28728583198856733,
+      "off_run_durations": {
+        "count": 26,
+        "maximum_s": 780.0,
+        "mean_s": 629.2307692307693,
+        "minimum_s": 540.0
+      },
+      "on_run_durations": {
+        "count": 26,
+        "maximum_s": 5520.0,
+        "mean_s": 1727.2259255599506,
+        "minimum_s": 1500.0
+      },
+      "overall_engine_off_fraction": 0.2670241174479347,
+      "requested_engine_power_range": {
+        "maximum_kw": 83.40205998293928,
+        "minimum_kw": 24.212011341180407
+      },
+      "restart_count": 25,
+      "restarts_per_loiter_hour": 1.6385123497446805
+    },
+    "objective_hours": 15.257742795710755,
+    "objective_loiter_seconds": 54927.87406455872,
+    "reference_improvement_minutes": 106.51656557342237,
+    "reference_improvement_percent": 13.167294472301606,
+    "reference_improvement_seconds": 6390.993934405342,
+    "resources": {
+      "final_fuel_kg": 7.1108440457862,
+      "final_soc": 0.1908816962739139,
+      "final_stored_battery_energy_kwh": 1.4084724013355796,
+      "fuel_slack_above_reserve_kg": 2.1108440457862,
+      "initial_fuel_kg": 264.39212973948446,
+      "minimum_soc": 0.1649574711067965,
+      "restart_fuel_consumed_kg": 2.5,
+      "running_fuel_consumed_kg": 254.7812856936986,
+      "total_fuel_consumed_kg": 257.28128569369824,
+      "usable_battery_energy_above_floor_kwh": 1.0479295161468802
+    },
+    "total_mission_seconds": 61267.87406455872,
+    "validity": {
+      "battery_energy_ledger_residual_kwh": -0.8410259004276668,
+      "battery_integration_residual_kwh": 0.8410259004275735,
+      "completed_climb": true,
+      "completed_cruise": true,
+      "completed_descent": true,
+      "completed_landing": true,
+      "completed_loiter_process": true,
+      "completed_takeoff": true,
+      "controller_infeasibility_count": 0,
+      "discrete_energy_ledger_residual_fraction": 0.0,
+      "entered_loiter": true,
+      "failure_flags": [
+        "engine_power_limited",
+        "battery_rate_limited"
+      ],
+      "fuel_ledger_residual_kg": -3.694822225952521e-13,
+      "hard_dwell_violation_count": 0,
+      "hidden_or_unaccounted_restart_count": 0.0,
+      "maximum_bus_power_residual_kw": 9.237055564881302e-14,
+      "plant_infeasibility_count": 0,
+      "reserve_shortfall_kg": 0.0,
+      "soc_floor_violation": 0.0,
+      "termination_reason": "fuel_reserve"
+    }
+  },
+  "normalized_chromosome": {
+    "design_space_id": "plant-thermostat-design-space-v1:bc968ac4dcc6165fd23f7d1e2cf70235d174107cddc67705190ed5a0ec586fb5",
+    "gene_names": [
+      "wing_area",
+      "aspect_ratio",
+      "engine_rating",
+      "battery_capacity",
+      "thermostat_soc_low",
+      "thermostat_soc_gap"
+    ],
+    "genes": [
+      0.30227374203316854,
+      0.9031772422046703,
+      0.29252574978674106,
+      0.13372564579449855,
+      0.28802960668814215,
+      0.5335666563306112
+    ],
+    "schema_version": 1
+  },
+  "resolved_design_id": "resolved-plant-design-v1:499da3d07716ec6aa17242470c73c1cfaeb80ce0dc6e5b32dd5c74a6e7d699fa",
+  "run": {
+    "completed_generation_count": 40,
+    "current_generation": 39,
+    "design_space": {
+      "design_space_id": "plant-thermostat-design-space-v1:bc968ac4dcc6165fd23f7d1e2cf70235d174107cddc67705190ed5a0ec586fb5",
+      "gene_names": [
+        "wing_area",
+        "aspect_ratio",
+        "engine_rating",
+        "battery_capacity",
+        "thermostat_soc_low",
+        "thermostat_soc_gap"
+      ],
+      "linear_bounds": [
+        {
+          "gene_name": "wing_area",
+          "lower": 6.0,
+          "unit": "m^2",
+          "upper": 16.0
+        },
+        {
+          "gene_name": "aspect_ratio",
+          "lower": 10.0,
+          "unit": "1",
+          "upper": 24.0
+        },
+        {
+          "gene_name": "engine_rating",
+          "lower": 60.0,
+          "unit": "kW",
+          "upper": 140.0
+        },
+        {
+          "gene_name": "battery_capacity",
+          "lower": 5.0,
+          "unit": "kWh",
+          "upper": 30.0
+        }
+      ],
+      "schema_version": 1,
+      "threshold_bounds": {
+        "encoding": "dependent_lower_and_gap",
+        "minimum_soc_gap": 0.05,
+        "soc_floor": 0.05,
+        "soc_high_upper": 0.95,
+        "soc_low_upper": 0.6,
+        "unit": "1"
+      }
+    },
+    "elapsed_runtime_s": 2069.3213535000104,
+    "fitness_scenario": {
+      "battery_safe_soc_floor": 0.2,
+      "classification": "uncalibrated practical restart-fuel sensitivity",
+      "discrete_energy_ledger_tolerance_fraction": 1e-12,
+      "dwell_semantics": "hard",
+      "engine_idle_fuel_fraction": 0.2,
+      "engine_min_power_fraction": 0.15,
+      "engine_on_power_kw": null,
+      "engine_sfc_rated_kg_kwh": 0.45,
+      "fitness_scenario_id": "fitness-scenario-v1:ea69ada05ce4ec97238d6b80a44583d5995a935ed509058658d95d493f8b0c58",
+      "fuel_ledger_tolerance_kg": 1e-09,
+      "initial_elapsed_in_state_s": 60.0,
+      "initial_engine_on": true,
+      "initial_soc": 1.0,
+      "minimum_off_time_s": 60.0,
+      "minimum_on_time_s": 60.0,
+      "mission": {
+        "descent_landing_fuel_kg": 4.7,
+        "fuel_reserve_kg": 5.0,
+        "initial_altitude_m": 0.0,
+        "max_mission_time_s": 86400.0,
+        "min_usable_fuel_kg": 20.0,
+        "phases": [
+          {
+            "altitude_mode": "hold",
+            "climb_rate_mps": null,
+            "duration_s": 120.0,
+            "name": "takeoff",
+            "speed_mode": "fixed",
+            "speed_mps": 50.0,
+            "target_altitude_m": 0.0,
+            "termination": "duration"
+          },
+          {
+            "altitude_mode": "climb_to",
+            "climb_rate_mps": 2.0,
+            "duration_s": null,
+            "name": "climb",
+            "speed_mode": "fixed",
+            "speed_mps": 65.0,
+            "target_altitude_m": 3000.0,
+            "termination": "altitude"
+          },
+          {
+            "altitude_mode": "hold",
+            "climb_rate_mps": null,
+            "duration_s": 3600.0,
+            "name": "cruise",
+            "speed_mode": "fixed",
+            "speed_mps": 69.44444444444444,
+            "target_altitude_m": 3000.0,
+            "termination": "duration"
+          },
+          {
+            "altitude_mode": "hold",
+            "climb_rate_mps": null,
+            "duration_s": null,
+            "name": "loiter",
+            "speed_mode": "min_power",
+            "speed_mps": null,
+            "target_altitude_m": 3000.0,
+            "termination": "resource"
+          },
+          {
+            "altitude_mode": "descend_to",
+            "climb_rate_mps": -3.0,
+            "duration_s": null,
+            "name": "descent",
+            "speed_mode": "fixed",
+            "speed_mps": 65.0,
+            "target_altitude_m": 0.0,
+            "termination": "altitude"
+          },
+          {
+            "altitude_mode": "hold",
+            "climb_rate_mps": null,
+            "duration_s": 120.0,
+            "name": "landing",
+            "speed_mode": "fixed",
+            "speed_mps": 45.0,
+            "target_altitude_m": 0.0,
+            "termination": "duration"
+          }
+        ]
+      },
+      "name": "practical_3km_thermostat_restart_0_1",
+      "normalization_epsilon": 1e-12,
+      "phase_completion_tolerance_s": 1e-09,
+      "power_balance_tolerance_kw": 1e-06,
+      "reserve_tolerance_kg": 1e-10,
+      "restart_accounting_tolerance_count": 1e-09,
+      "restart_fuel_kg": 0.1,
+      "schema_version": 1,
+      "soc_floor_tolerance": 1e-10,
+      "static_scenario": {
+        "battery_charge_c_rate": 1.0,
+        "battery_chemistry": "lithium_ion_nmc",
+        "battery_discharge_c_rate": 3.0,
+        "battery_mode": "legacy",
+        "battery_r_ref_capacity_kwh": 10.0,
+        "battery_r_ref_ohm": 0.05,
+        "battery_scale_resistance": true,
+        "battery_soc_floor": 0.05,
+        "battery_v_max_v": 400.0,
+        "battery_v_min_v": 300.0,
+        "cabling_cooling_fraction": 0.15,
+        "cell_energy_density_wh_kg": 250.0,
+        "cl_max": 1.5,
+        "climb_rate_mps": 2.0,
+        "climb_speed_mps": 65.0,
+        "cruise_altitude_m": 3000.0,
+        "cruise_speed_mps": 69.44444444444444,
+        "engine_allow_shutdown": true,
+        "engine_kw_per_kg": 3.5,
+        "engine_lapse_exponent": 0.8,
+        "equivalent_skin_friction": 0.0055,
+        "eta_cabling": 0.99,
+        "eta_generator": 0.95,
+        "eta_inverter": 0.95,
+        "eta_motor": 0.95,
+        "eta_rectifier": 0.95,
+        "fixed_group_kg": 250.0,
+        "fixed_nonwing_wetted_area_m2": 22.896044038214548,
+        "fuel_density_kg_per_l": 0.804,
+        "fuel_system_fraction": 0.07,
+        "generator_kw_per_kg": 3.0,
+        "inverter_kw_per_kg": 15.0,
+        "landing_speed_mps": 45.0,
+        "mass_closure_tolerance_kg": 1e-09,
+        "minimum_usable_fuel_kg": 20.0,
+        "motor_kw_per_kg": 7.0,
+        "mtow_kg": 1000.0,
+        "normalization_epsilon": 1e-12,
+        "oswald_efficiency": 0.78,
+        "oswald_is_fixed": true,
+        "oswald_policy": "fixed_reference",
+        "pack_factor": 0.75,
+        "payload_kg": 200.0,
+        "powertrain_load_dependent": false,
+        "powertrain_noload_loss_fraction": 0.3,
+        "propeller_efficiency": 0.85,
+        "rectifier_kw_per_kg": 15.0,
+        "reference_cd0": 0.028,
+        "reference_wing_area_m2": 7.59175537062125,
+        "service_ceiling_altitude_m": 10000.0,
+        "service_ceiling_climb_rate_mps": 0.5,
+        "service_ceiling_is_hard": false,
+        "sizing_margin": 1.1,
+        "stall_speed_margin": 1.2,
+        "takeoff_speed_mps": 50.0,
+        "tank_volume_fraction": 0.5,
+        "thermostat_minimum_gap": 0.05,
+        "thermostat_soc_high_upper": 0.95,
+        "thermostat_soc_low_upper": 0.6,
+        "thickness_to_chord": 0.15,
+        "timestep_s": 60.0,
+        "wetted_area_policy": "reference_calibrated_wetted_area",
+        "wing_mass_construction_factor": 0.87,
+        "wing_mass_cruise_dynamic_pressure_pa": 1590.5,
+        "wing_mass_limit_load_factor": 3.8,
+        "wing_mass_nominal_fuel_kg": 250.0,
+        "wing_mass_sweep_rad": 0.0,
+        "wing_mass_taper_ratio": 0.5,
+        "wing_mass_ultimate_factor": 1.5
+      },
+      "terminal_strategy": "causal",
+      "timestep_s": 60.0
+    },
+    "ga_config": {
+      "crossover_probability": 0.9,
+      "duplicate_retry_limit": 32,
+      "early_stop_patience": 10,
+      "elite_count": 2,
+      "ga_config_id": "ga-config-v1:9b5cdbda49e89f328158b4875663f922c0010ce223adde1cf7f79e850c140ea6",
+      "generation_convention": "max_generations_total_including_generation_zero",
+      "initial_perturbation_scale": 0.05,
+      "material_relative_improvement": 0.0001,
+      "max_generations": 40,
+      "mutation_distribution_index": 20.0,
+      "mutation_probability_per_gene": 0.16666666666666666,
+      "population_size": 64,
+      "random_seed": 20260808,
+      "sbx_distribution_index": 15.0,
+      "schema_version": 1,
+      "tournament_size": 3
+    },
+    "is_complete": true,
+    "statistics": {
+      "cache_hits": 98,
+      "candidate_placements": 2482,
+      "dynamic_infeasible_results": 198,
+      "feasible_results": 1611,
+      "mission_calls": 1809,
+      "static_infeasible_results": 575,
+      "unique_fitness_evaluations": 2384
+    },
+    "termination_reason": "max_generations",
+    "warnings": []
+  }
+}

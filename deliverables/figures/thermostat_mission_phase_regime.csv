@@ -1,0 +1,8 @@
+phase,regime,duration_s,engine_off_fraction,running_fuel_kg,restart_fuel_kg,battery_charge_kwh,battery_discharge_kwh,minimum_soc,active_constraints
+takeoff,continuous_engine,120.0,0.0,0.7299175137118465,0.0,0.0,0.0,1.0,"[""battery_cannot_carry_full_demand""]"
+climb,battery_assisted,1500.0,0.0,14.906240778907469,0.0,0.0,3.6163107671033177,0.6695007762201075,"[""engine_max""]"
+cruise,continuous_engine,3600.0,0.0,29.861683034334632,0.0,0.0,0.0,0.6695007762201075,"[""battery_cannot_carry_full_demand""]"
+loiter,continuous_engine,12300.0,0.0,69.99368735785696,0.0,1.4802973661668755e-15,1.7763568394002505e-15,0.6695007762201075,"[""battery_cannot_carry_full_demand""]"
+loiter,cycling,36974.32539909772,0.2807353450795698,163.41866962613076,0.0,73.87312610860475,74.39278643532597,0.35323007103028303,"[""battery_charge_limit""]"
+descent,cycling,1000.0,0.48,2.8807008335386657,0.0,1.444444444444443,2.3365403464281997,0.3723178849966382,"[""battery_charge_limit""]"
+landing,cycling,120.0,0.0,0.7068330429175794,0.0,0.3333333333333347,0.0,0.5021905426303381,"[""battery_charge_limit""]"

@@ -15,11 +15,13 @@ from src.models.powertrain import SeriesPowertrain
 __all__ = [
     "DwellSemantics",
     "TerminalStrategy",
+    "ThermostatCommand",
     "ThermostatDecision",
     "ThermostatParameters",
     "ThermostatRegime",
     "ThermostatState",
     "select_engine_on_power",
+    "schedule_thermostat",
     "thermostat_step",
 ]
 
@@ -110,9 +112,25 @@ class ThermostatState:
 
 
 @dataclass(frozen=True)
+class ThermostatCommand:
+    """One pure scheduling command before plant-model evaluation."""
+
+    requested_engine_on: bool
+    requested_engine_shaft_kw: float
+    regime: ThermostatRegime
+    regime_reason: str
+    active_constraint: str
+    transitioned: bool
+    dwell_violation: bool
+    next_state: ThermostatState
+    feasible: bool
+
+
+@dataclass(frozen=True)
 class ThermostatDecision:
     """One scheduled split and the explicit next scheduler state."""
 
+    requested_engine_shaft_kw: float
     engine_shaft_kw: float
     bus_from_engine_kw: float
     battery_bus_kw: float
@@ -238,7 +256,7 @@ def _terminal_triggered(
     return time_to_go_s <= available_h * 3600.0 + dt_s
 
 
-def thermostat_step(
+def schedule_thermostat(
     parameters: ThermostatParameters,
     state: ThermostatState,
     *,
@@ -252,8 +270,8 @@ def thermostat_step(
     time_to_go_s: float | None = None,
     terminal_energy_target_kwh: float | None = None,
     off_dwell_feasible: bool | None = None,
-) -> ThermostatDecision:
-    """Advance a thermostat schedule without mutating controller or plant state."""
+) -> ThermostatCommand:
+    """Advance the scheduler without evaluating or integrating the plant."""
     demand = _finite("demand_bus_kw", demand_bus_kw)
     duration = _finite("dt_s", dt_s)
     if demand < 0.0 or duration <= 0.0:
@@ -328,12 +346,10 @@ def thermostat_step(
             engine_kw = selection.power_kw
             active = selection.active_constraint
             if state.engine_on:
-                can_stop = state.elapsed_in_state_s >= parameters.minimum_on_time_s
-                if soc >= parameters.soc_high - SOC_EPS and can_stop:
+                if soc >= parameters.soc_high - SOC_EPS:
                     requested_on = False
             else:
-                can_start = state.elapsed_in_state_s >= parameters.minimum_off_time_s
-                if soc <= parameters.soc_low + SOC_EPS and can_start:
+                if soc <= parameters.soc_low + SOC_EPS:
                     requested_on = True
 
     dwell_forced_on = False
@@ -359,9 +375,11 @@ def thermostat_step(
             if not permitted:
                 requested_on = True
                 dwell_forced_on = True
+    dwell_forced_off = False
     if not state.engine_on and requested_on:
         dwell_met = state.elapsed_in_state_s >= parameters.minimum_off_time_s
         requested_on = dwell_met
+        dwell_forced_off = not dwell_met
 
     if requested_on:
         if dwell_forced_on:
@@ -378,17 +396,15 @@ def thermostat_step(
             command_kw = min(max(engine_kw, engine.idle_power_kw), engine_max)
     else:
         command_kw = 0.0
-    engine_state = engine.operate(command_kw, sigma)
-    if not requested_on and not engine_state.shut_down:
-        raise RuntimeError("thermostat OFF was converted into engine idling")
-    bus_from_engine = float(powertrain.bus_power_from_engine(engine_state.delivered_kw))
+    if dwell_forced_off:
+        active = "hard_off_dwell"
+    bus_from_engine = float(powertrain.bus_power_from_engine(command_kw))
     battery_kw = demand - bus_from_engine
     charge_limit = battery.available_charge_kw(soc, duration)
     feasible = (
         battery_kw <= discharge_limit + _POWER_TOLERANCE_KW
         and battery_kw >= -charge_limit - _POWER_TOLERANCE_KW
     )
-    battery_internal = battery.internal_power_kw(battery_kw, soc, duration)
     transitioned = requested_on != state.engine_on
     restarted = not state.engine_on and requested_on
     next_state = ThermostatState(
@@ -397,7 +413,65 @@ def thermostat_step(
         restart_count=state.restart_count + int(restarted),
         terminal_depletion=terminal,
     )
+    return ThermostatCommand(
+        requested_engine_on=requested_on,
+        requested_engine_shaft_kw=command_kw,
+        regime=regime,
+        regime_reason=reason,
+        active_constraint=active,
+        transitioned=transitioned,
+        dwell_violation=False,
+        next_state=next_state,
+        feasible=feasible,
+    )
+
+
+def thermostat_step(
+    parameters: ThermostatParameters,
+    state: ThermostatState,
+    *,
+    demand_bus_kw: float,
+    soc: float,
+    sigma: float,
+    dt_s: float,
+    engine: Turboshaft,
+    battery: BatteryPack,
+    powertrain: SeriesPowertrain,
+    time_to_go_s: float | None = None,
+    terminal_energy_target_kwh: float | None = None,
+    off_dwell_feasible: bool | None = None,
+) -> ThermostatDecision:
+    """Evaluate one pure thermostat command through the replay plant path."""
+    command = schedule_thermostat(
+        parameters,
+        state,
+        demand_bus_kw=demand_bus_kw,
+        soc=soc,
+        sigma=sigma,
+        dt_s=dt_s,
+        engine=engine,
+        battery=battery,
+        powertrain=powertrain,
+        time_to_go_s=time_to_go_s,
+        terminal_energy_target_kwh=terminal_energy_target_kwh,
+        off_dwell_feasible=off_dwell_feasible,
+    )
+    engine_state = engine.operate(command.requested_engine_shaft_kw, sigma)
+    if not command.requested_engine_on and not engine_state.shut_down:
+        raise RuntimeError("thermostat OFF was converted into engine idling")
+    bus_from_engine = float(powertrain.bus_power_from_engine(engine_state.delivered_kw))
+    battery_kw = float(demand_bus_kw) - bus_from_engine
+    discharge_limit = battery.available_discharge_kw(soc, dt_s)
+    charge_limit = battery.available_charge_kw(soc, dt_s)
+    feasible = (
+        command.feasible
+        and battery_kw <= discharge_limit + _POWER_TOLERANCE_KW
+        and battery_kw >= -charge_limit - _POWER_TOLERANCE_KW
+    )
+    battery_internal = battery.internal_power_kw(battery_kw, soc, dt_s)
+    restarted = not state.engine_on and command.requested_engine_on
     return ThermostatDecision(
+        requested_engine_shaft_kw=command.requested_engine_shaft_kw,
         engine_shaft_kw=engine_state.delivered_kw,
         bus_from_engine_kw=bus_from_engine,
         battery_bus_kw=battery_kw,
@@ -405,11 +479,11 @@ def thermostat_step(
         fuel_flow_kg_s=engine_state.fuel_flow_kg_s,
         restart_fuel_kg=parameters.restart_fuel_kg if restarted else 0.0,
         engine_off=engine_state.shut_down,
-        regime=regime,
-        regime_reason=reason,
-        active_constraint=active,
-        transitioned=transitioned,
-        dwell_violation=False,
-        next_state=next_state,
+        regime=command.regime,
+        regime_reason=command.regime_reason,
+        active_constraint=command.active_constraint,
+        transitioned=command.transitioned,
+        dwell_violation=command.dwell_violation,
+        next_state=command.next_state,
         feasible=feasible,
     )

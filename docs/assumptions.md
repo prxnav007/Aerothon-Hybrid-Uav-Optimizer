@@ -685,6 +685,53 @@ roundoff and is not an optimisation tolerance. Discrete policies can jump across
 interval, so scalar bisection terminates as soon as it repeats the same adjacent policy pair. The
 induction cap is a runtime guard and does not turn an unconverged result into a bound.
 
+### C-08 — Full-mission thermostat integration reference
+**Value:** causal scheduling; SoC thresholds 0.4/0.6; minimum ON/OFF dwell 60/60 s; restart fuel
+0 kg/start; computed ON power; 60 s mission timestep. `UNVERIFIED` (uncalibrated reference)
+**Rationale:** This named configuration exercises the replay-tested thermostat through the complete
+six-phase plant simulation without changing the ECMS default or tuning thresholds. The initial
+state is explicitly engine ON with 60 s elapsed, so power is available at mission start, minimum
+ON dwell is already satisfied, and initial availability is not miscounted as a restart.
+**Implementation:** `run_mission` accepts the thermostat only through opt-in keyword arguments and
+rejects horizon-aware scheduling. The scheduler emits an engine command and explicit next state;
+the simulator alone evaluates and integrates the engine, battery, fuel and restart accounting.
+Thermostat and engine restart-fuel values must match to prevent competing ownership.
+**Bias:** Optimistic. Zero restart fuel omits start energy, spool delay and engine-life cost. The
+thresholds are an integration fixture, not a calibrated or optimal controller claim.
+
+### C-09 — Global thermostat threshold-search resolution
+**Value:** search over the actual usable SoC interval [0.05, 1.0]; minimum threshold separation
+0.05; 56-point deterministic triangular coarse mesh including (0.4, 0.6); four retained coarse
+regions; 0.025 local refinement step; maximum 72 completed full-mission evaluations. `VERIFIED`
+(bounded numerical policy), `UNVERIFIED` (resolution sufficiency)
+**Rationale:** Two controller variables do not justify stochastic optimisation. The mesh includes
+the battery floor, narrow and wide bands, upper thresholds through 1.0 and the untuned reference.
+The nonzero separation prevents threshold equality and same-bound numerical chatter at the 60 s
+control resolution. Every completed mission is appended and flushed to CSV before the next begins;
+resume skips threshold pairs by a stable decimal key.
+**Selection:** Endurance is the only primary objective. Infeasible missions are excluded rather
+than penalised into the ranking. Exact event-time ties within 1×10⁻⁶ s are disclosed and broken by
+restart count, transition-duration margin and remaining resources, in that order. No terminal-SoC
+reward or depletion penalty is applied.
+**Bias:** The result is the best feasible pair found inside these bounds and this resolution, not a
+proof of continuous global optimality. Zero restart fuel retains the optimistic bias from C-08.
+
+### C-10 — Frozen-aircraft controller comparison and restart sensitivity
+**Value:** fixed-ECMS local ratios 1.0/1.1/1.2; PI local ratios 1.2/1.3/1.4 and gains
+0/2.5/5.0; restart-fuel sensitivities 0/0.1/0.5 kg per OFF-to-ON transition; optional 0.1 kg/start
+retuning capped at 18 full missions. For the practical recommendation only, retaining at least 99%
+of the best zero-cost endurance is treated as close. `VERIFIED` (bounded numerical policy),
+`UNVERIFIED` (99% recommendation threshold), `PLACEHOLDER` (positive restart-fuel values)
+**Rationale:** The historical fixed/PI headline settings are not accompanied by executable sweep
+code or checkpoints in the current tree. The stated neighbourhood reconstructs only the adjacent
+historical resolution needed to detect a stale selected point. Controller parameters are selected
+at zero restart cost, then frozen for the three common simulator reruns. A changed 0.1 kg/start
+ranking alone opens the bounded retuning gate; it does not promote that uncalibrated value to a
+physical claim. Figures read their plotted values back from source CSV and retain the same
+controller colour identity across PNG, SVG and PDF exports.
+**Bias:** Zero restart cost favours memoryless ECMS switching. Positive values expose sensitivity
+but cannot identify the physically correct transition penalty without calibration.
+
 ### S-01 — Fill-to-MTOW fuel policy
 **Value:** Fuel loaded = MTOW − dry mass. `VERIFIED`
 **Rationale:** Makes the powertrain-versus-fuel trade explicit and direct. Every kilogram spent on
@@ -810,6 +857,198 @@ constraint-diagram specification's unsupported “roughly flat across 0–10 km�
 
 ---
 
+## 8a. Optimization — `optimization/chromosome.py`
+
+### OPT-01 — Initial plant–thermostat chromosome design space
+**Value:** Six normalized binary64 genes in the fixed order `wing_area`, `aspect_ratio`,
+`engine_rating`, `battery_capacity`, `thermostat_soc_low`, `thermostat_soc_gap`. Physical plant
+bounds are 6–16 m², 10–24, 60–140 kW and 5–30 kWh. The lower thermostat threshold spans the
+configured battery cutoff to 0.60; the dependent upper threshold spans from 0.05 above that lower
+threshold to 0.95. `UNVERIFIED` (physical search bounds), `VERIFIED` (encoding and inverse)
+**Rationale:** The dependent gap coordinate makes every decoded pair ordered and separated without
+repair after crossover or mutation. Bounds remain an explicit immutable input to every transform;
+their versioned identity and each normalized binary64 value's exact hexadecimal representation
+enter the SHA-256 cache key, so no decimal rounding merges distinct candidates.
+**Seeds:** The two deterministic anchors use the stored band-aircraft precision of 7.59175537062125
+m² and 86.7791369750147 kW, with aspect ratio 16 and battery capacity 10 kWh. These differ from the
+rounded prompt values by −0.00024462937875 m² and +0.0001369750147 kW. The practical threshold pair
+is 0.225/0.350 and the ideal restart-fuel pair is 0.225/0.300. They initialize a later search; they
+are not production defaults or global-optimality claims.
+**Exclusions:** C_D0 is a geometry-derived quantity; fuel follows fixed-MTOW mass closure; restart
+fuel and dwell are external physical scenarios; aerodynamic, battery and engine uncertainty inputs
+belong in sensitivity analysis; the thermostat computes maximum feasible ON power; mission inputs
+and GA operators are not aircraft genes. Cruise altitude remains excluded while O-07 is open.
+**Integration gate:** The current mission `Aircraft` still stores and forwards a fixed C_D0 and the
+reference builder still sets 0.028. OPT-02 now resolves the wing-area gate only for the opt-in GA
+static path; no ordinary mission or controller-study path uses its calibrated wetted-area model.
+The reference path similarly stores Oswald efficiency 0.78 independently of aspect ratio. Aspect
+ratio still changes induced drag through 1/(π·AR·e) and wing mass through the Raymer AR^0.6 term,
+but no Oswald correlation is called automatically; conclusions remain conditional on O-01.
+**Bias:** Unknown. Wide provisional bounds expose model behaviour but do not validate the physical
+extremes, and fixed C_D0 would artificially reward wing-area reduction if the integration gate were
+ignored.
+
+### OPT-02 — Static plant resolution and reference-calibrated wetted area
+**Value:** `optimization/feasibility.py` is an opt-in, immutable algebraic screen between chromosome
+decoding and later mission fitness. Its nominal policy is `reference_calibrated_wetted_area`, with
+C_fe = 0.0055, t/c = 0.15, reference S = 7.59175537062125 m² and reference C_D0 = 0.028.
+The inferred fixed fuselage, empennage, boom and other non-wing aggregate is
+22.896044038214548 m². `PROVISIONAL` (aggregate geometry), `VERIFIED` (implementation identities)
+
+The wing approximation and total buildup are
+
+```
+S_wet,wing = 2 S (1 + 0.25 t/c)
+S_wet,total = 22.896044038214548 + S_wet,wing
+C_D0 = C_fe S_wet,total / S
+```
+
+The final line is evaluated by `parasite_drag_from_wetted_area`, not reimplemented in the
+optimization layer. At S = 6, 7.59175537062125, 10 and 16 m² it gives total wetted areas of
+35.346044, 38.648936, 43.646044 and 56.096044 m², and C_D0 values of 0.03240054, exactly 0.028,
+0.02400532 and 0.01928302. Although C_D0 falls, C_D0 S rises monotonically over those points, so
+enlarging the wing does not receive free parasite-drag-area reduction. The fixed aggregate is an
+inference that preserves the controller-study reference aircraft, not measured component geometry;
+later sensitivity must vary or replace it.
+
+**Scenario and policy isolation:** The scenario serializes mission point conditions, mass-model
+inputs, battery branch and rates, powertrain efficiencies and load-dependence branch, engine lapse
+and shutdown branch, thermostat bounds, fuel/tank inputs, wetted-area calibration and fixed Oswald
+policy. A SHA-256 identity uses lossless binary64 values. Evaluation writes no files and does not
+import the simulator, thermostat, fitness or GA. The default reference-aircraft C_D0 and the 51 m²
+aerodynamics formula fixture are unchanged.
+
+**Nominal aerodynamic policy:** e = 0.78 is fixed and recorded as `fixed_reference`; aspect ratio
+still changes k = 1/(π AR e) and the authoritative wing-mass regression. Activating aspect ratio in
+a later fitness calculation is therefore mechanically consistent but conclusions remain
+conditional on this fixed-e choice and O-01.
+
+**Hard constraints:** finite positive wing area, aspect ratio, engine rating and battery capacity;
+nonnegative component masses; thermostat floor, lower/upper limits and minimum gap; fixed-MTOW
+closure; minimum usable fuel; tank volume; landing-derived stall margin; 3 km cruise rating with
+the CD-04 10% margin; 3 km mission-speed climb rating with sustainable battery assistance and the
+same margin; take-off point combined engine/battery power with that margin; and battery discharge
+sustainable over the 60 s static-screen step. The 10 km, +0.5 m/s service-ceiling point is advisory
+under the active O-12 3 km band interpretation and becomes hard only through an explicit scenario
+flag. No take-off-distance surrogate is added.
+
+Each record carries the physical quantity, bound, signed margin, units, source and a dimensionless
+violation. Lower-bound violations use `max(0, required - available) / max(|required|, ε)` and
+upper-bound violations use `max(0, actual - allowed) / max(|allowed|, ε)`. Binary64 discrepancies
+at or below ε = 10⁻¹² relative are recorded as zero violation. Only hard violations enter their
+exact sum, maximum and count; advisory constraints and warnings cannot make a candidate infeasible.
+
+**Static reference audit:** The practical seed resolves to span 11.021256 m, chord 0.688829 m,
+C_D0 = 0.028, e = 0.78 and stall speed 37.496485 m/s against 37.5 m/s allowed. Component masses
+are: fixed group 250.000000 kg, payload 200.000000 kg, wing 97.041791 kg, engine 24.794039 kg,
+generator 28.926379 kg, rectifier 5.785276 kg, inverter 7.221211 kg, motor 15.474024 kg,
+cabling/cooling 8.611034 kg, battery 53.333333 kg and fuel system 20.202714 kg. Dry mass is
+711.389802 kg and the un-clipped fuel residual is 288.610198 kg. Required/available tank volumes
+are 358.967908/392.206313 L, a +33.238405 L margin.
+
+The reference engine rating is 86.779137 kW sea-level shaft and 68.360327 kW at 3 km. Required
+sea-level-equivalent ratings after the 10% margin are 86.779137 kW cruise, 69.881003 kW climb and
+6.485925 kW at the take-off point, giving numerical-zero, +16.898134 and +80.293212 kW margins.
+The battery can sustain 30.000000 kW for the screen step against 13.469851 kW required, a
++16.530149 kW bus margin. Every hard record passes and total hard violation is zero. The advisory
+10 km ceiling requires 174.499453 kW and misses by 87.720316 kW. Warnings identify the inferred
+wetted-area aggregate, fixed-e conditionality and the fact that static passage does not prove the
+six-phase mission.
+
+**Bias:** Unknown. The reference identity is exact by calibration, but extrapolation across wing
+area assumes the entire non-wing wetted area stays fixed and the wing thickness ratio stays fixed.
+Static feasibility also omits fuel burn, SoC trajectory, phase transitions, reserves, restart fuel,
+dwell behaviour and time-varying power balance; those remain the responsibility of later mission
+fitness.
+
+### OPT-03 — Single-candidate full-mission fitness contract
+**Value:** The nominal scenario is the existing six-phase 3 km mission at its 60 s default step,
+1000 kg MTOW, 200 kg payload, 0.1 kg fuel per OFF-to-ON start and 60 s hard ON/OFF dwell. The
+thermostat is causal, uses one global SoC band and retains the simulator's maximum-feasible ON-power
+rule. The objective is loiter duration alone. `PLACEHOLDER` (restart fuel), `UNVERIFIED` (dwell),
+`VERIFIED` (integration and deterministic reference reproduction)
+
+**Scope and isolation:** `optimization/fitness.py` decodes and statically screens one normalized
+chromosome, constructs fresh immutable plant/controller inputs from its `ResolvedPlantDesign`, and
+calls `run_mission` at most once. Static failure skips simulation. The result and cache identity
+include the chromosome, design-space, static-scenario, fitness-scenario and result-schema identities;
+no process-randomized hash or persistent cache is used. The 0.1 kg/start scenario is an uncalibrated
+practical sensitivity, not a validated start model.
+
+**Plant and feasibility contract:** Fuel is the single fixed-MTOW residual, 1000 kg minus resolved
+dry mass; component masses are not added again. Wing area supplies reference area, calibrated C_D0
+and wing mass; aspect ratio supplies induced drag and wing mass; engine rating supplies lapsed power
+and propulsion mass; battery capacity supplies stored energy, mass, resistance and rate limits; the
+two thermostat genes supply the lower and decoded upper thresholds. Static constraints cover the
+algebraic design screen. Dynamic feasibility separately requires all mandatory phases including
+descent and landing, reserves and battery floor, feasible controller/plant delivery, hard dwell and
+restart accounting, and closed bus, fuel and discrete battery-energy ledgers. Normal fuel-reserve
+loiter exit is allowed when descent and landing subsequently complete. Terminal SoC equality is not
+required in this variable-duration problem, and unused fuel or energy is diagnostic only.
+
+Active engine or battery limiting is not by itself a power failure when delivered bus power still
+balances demand; the authoritative reference exercises both limits. The endpoint battery-energy
+residual retains the documented explicit-Euler OCV integration bias and is reported as a warning;
+the independently reconstructed discrete-energy residual is the hard closure gate. Physical
+normalization scales are distinct from numerical ledger tolerances.
+
+**Failure policy and provisional assumptions:** Only the fitness runner adapter's documented
+candidate-physical exception is converted to structured infeasibility. Unexpected exceptions,
+assertions, schema errors and nonfinite simulator output propagate. The reference-calibrated
+wetted-area extrapolation and fixed e = 0.78 remain provisional under OPT-02 and O-01. No GA,
+population, sweep, sensitivity analysis or optimization result is part of this milestone.
+
+**Reference gate:** The practical reference chromosome at S = 7.59175537062125 m², AR = 16,
+86.7791369750147 kW, 10 kWh and SoC band 0.225/0.350 reproduces the stored 0.1 kg/start comparison:
+54876.880130153375 s total, 48536.880130153375 s loiter and 50 restarts, with the stored fuel, SoC,
+OFF-fraction, completion and ledger diagnostics within their established deterministic tolerances.
+
+### OPT-04 — Deterministic constrained genetic-algorithm method
+**Value:** One run uses 64 individuals, 40 total evaluated populations including generation zero,
+two elites, tournament size three, pairwise crossover probability 0.90, bounded simulated binary
+crossover with eta_c = 15, independent bounded polynomial mutation with probability 1/6 per gene
+and eta_m = 20, and ten-generation early-stop patience at 10^-4 relative material improvement.
+The deterministic default development seed is 20260808; production seed sets remain an external
+orchestration choice. Exact-duplicate construction retries are capped at 32 before the documented
+fresh-uniform/final-duplicate fallback, and a 10^-12 combined-violation tolerance only absorbs the
+fitness layer's existing normalization roundoff.
+`UNVERIFIED` (initial hyperparameters), `VERIFIED` (deterministic implementation and resume)
+
+**Initialization and replacement:** Forty-eight normalized chromosomes use independently permuted
+six-dimensional Latin-hypercube strata. The remaining sixteen are the exact practical and ideal
+reference seeds plus seven reflected normal-space perturbations around each at initial standard
+deviation 0.05 per gene. Full generational replacement retains two unchanged elites and creates 62
+offspring positions. All operators act on the normalized lower-threshold/gap encoding; no decoded
+threshold repair, physical-unit operator or adaptive mutation is used. These values are justified
+starting settings for six variables and have not been hyperparameter-tuned.
+
+**Ordering and stopping:** Deb ordering is authoritative: feasible beats infeasible, feasible
+candidates maximize loiter seconds, infeasible candidates minimize combined normalized violation,
+and exact ties use deterministic evaluation identity only. Resource slack, restart count and final
+SoC are not secondary objectives. A sub-threshold objective increase updates the exact best-found
+record without resetting patience. Stagnation is unavailable until a feasible result exists, and
+means only that the finite stochastic search stopped—not mathematical convergence or global
+optimality.
+
+**Budget and recovery:** With generation zero plus 39 offspring generations, the pre-cache upper
+bound is 64 + 39(64 - 2) = 2482 candidate placements per seed, or 7446 for three seeds. Exact
+chromosome/evaluation identities cache feasible and infeasible results without rounded matching.
+Every new evaluator result is immediately appended to a checksummed JSONL ledger and `fsync`ed;
+every completed generation atomically replaces a checksummed JSON checkpoint containing population,
+history, counters, stagnation state and complete NumPy PCG64 state. Resume validates chromosome,
+bounds, GA, scenario and codec identities, ignores and removes only an interrupted final JSONL tail,
+and reuses committed post-checkpoint evaluations before replaying the same stochastic operations.
+
+**Interpretation:** Outputs must be called a `best_found`, `best_feasible_found` or search result.
+No production UAV population, multiple-seed comparison or GA hyperparameter optimization has been
+run. Sensitivity analysis remains later work because GA convergence diagnostics do not measure
+model-input uncertainty or resolve the provisional assumptions in OPT-02/OPT-03.
+
+**Bias:** Unknown. The selected operators and finite budget can miss better feasible regions, while
+the two reference-centred seed clouds can bias early sampling toward the current reference plant.
+
+---
+
 ## 9. Open decisions
 
 These must be resolved and this document updated before final submission.
@@ -897,6 +1136,13 @@ actual editions before citation in the technical report.
 
 | Date | Change |
 |---|---|
+| 2026-08-08 | **GA Milestone 3 deterministic engine.** Added OPT-04 and `optimization/ga.py`: 48-point Latin-hypercube plus 16-member reference-seeded initialization, Deb ranking, tournament/SBX/polynomial operators, two-elite replacement, exact evaluation caching, immutable histories/results, material-improvement stopping, checksummed JSONL evaluation ledger, atomic JSON generation checkpoints and exact PCG64 resume. The 40-total-population convention caps one seed at 2482 placements. Only analytical/mock objectives were optimized; no production mission population or hyperparameter tuning was run. |
+| 2026-08-08 | **GA Milestone 2 full-mission fitness.** Added OPT-03 and `optimization/fitness.py`: explicit immutable 3 km/0.1 kg-start scenario, authoritative resolved-plant conversion, fixed-MTOW fuel closure, single-call mission evaluation, loiter-only objective, structured static/dynamic violations, fresh-state isolation and deterministic evaluation identity. The one practical reference mission reproduced its stored artifact; no GA, sweep or optimization was run. |
+| 2026-08-08 | **GA Milestone 1 static plant feasibility.** Added OPT-02 and `optimization/feasibility.py`: immutable resolved geometry, component mass/fixed-MTOW fuel closure, tank and point-power capability, Deb-compatible normalized hard violations, advisory 10 km ceiling handling and deterministic scenario identity. Authorised the opt-in `reference_calibrated_wetted_area` policy, which infers 22.896044038214548 m² fixed non-wing wetted area and exactly preserves C_D0 = 0.028 at the reference wing. Fixed e = 0.78 remains explicit and conditional; ordinary mission aircraft, controller results, fitness and GA are unchanged. |
+| 2026-08-08 | **Plant–thermostat chromosome foundation.** Added OPT-01 for the immutable six-gene normalized representation, explicit battery-floor-derived design space, dependent threshold inverse, lossless binary64 cache canonicalization, deterministic serialization and exact practical/ideal reference seeds. Recorded that current mission C_D0 is fixed as area changes and that Oswald efficiency is stored independently of aspect ratio; no fitness, mission, GA operator or optimization result was added. |
+| 2026-08-07 | **Frozen-aircraft controller comparison.** Added C-10 for bounded reconstruction of the missing fixed/PI local sweeps, exact zero-cost controller reruns, common authoritative restart-fuel sensitivities, conditional 0.1 kg/start local retuning, resumable mission checkpoints and CSV-backed presentation figures. The practical recommendation defines "close" as retaining at least 99% of the best ideal endurance and leaves that judgment threshold unverified. Plant values, controller defaults, battery physics, DP, fuzzy ECMS and GA remain unchanged. |
+| 2026-08-07 | **Controller-only thermostat threshold study.** Added C-09 for the deterministic 72-evaluation coarse-to-fine search, append-only resume checkpoints, phase fuel/battery ledgers, feasibility-first ranking, exact winner repeat, one-step loiter extension check and conditional phase-dependent gate. Plant parameters, dwell, restart, ON-power physics and ECMS defaults remain frozen. |
+| 2026-08-07 | **Opt-in full-mission thermostat integration.** Added C-08, separated the pure thermostat command from replay plant evaluation, carried explicit dwell/transition state through all mission phases, retained `run_mission` as the single plant and restart-fuel accounting owner, and added the named uncalibrated six-phase reference report. Existing ECMS dispatch remains the ordinary path. |
 | 2026-08-07 | **Milestones 2/3 numerical-validity recovery.** Added C-07, separated ledger and terminal-target residuals, replaced raw opposite-energy fuel intervals with endpoint-policy data, added a 208-policy exhaustive oracle, Lagrangian dual lower bounds and exact discrete-target upper bounds, made dwell hard in thermostat and DP comparisons, and added caching, policy hashes, induction caps, incremental checkpoints and resume support. Historical production artifacts are retained but reclassified as exploratory in `docs/numerical_validity_recovery.md`. |
 | 2026-08-07 | **Opt-in `control/fuzzy_ecms.py` benchmark.** Added C-06 for a complete 3×3 zero-order Sugeno controller using SoC and normalized bus demand, with consequent bounds expressed as ratios around the marginal `switching_s` reference. The controller remains absent from mission defaults and the optimization skeleton, so O-08 stays open. Added contract, rule-coverage, gene-responsiveness, validation and power-split boundary tests. |
 | 2026-08-05 | **Marginal controller anchor, reserve semantics, and sizing interpretations.** Added `switching_s` to the controller context and made it the fixed-ratio and PI-ratio anchor; `neutral_s` remains an average-cost diagnostic. Resolved O-04 to engine shutdown by default while retaining idle sensitivity, and added simulator accounting for off-to-on restart fuel. Split S-04 into 4.7 kg for measured descent/landing consumption and a separate 5.0 kg post-landing reserve, with explicit reserve-shortfall reporting. Opened O-12 and recorded both constraint results: 133.270 kW with a required 10 km ceiling versus 86.779 kW when the stated altitude is treated as a selectable cruise band. |

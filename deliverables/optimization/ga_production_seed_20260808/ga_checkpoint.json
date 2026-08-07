@@ -1,0 +1,1713 @@
+{
+  "best_feasible_evaluation_key": "fitness-evaluation-v1:de78c4947360d70a8bb0f6807e2a875a5b851f136d4fe1d22973b39d95301c3f",
+  "checkpoint_digest": "ga-checkpoint-v1:3353c8535f80e501395027b3e44410bc059674b587461bd799d5c3abbd6553a6",
+  "chromosome_schema_version": 1,
+  "current_generation": 39,
+  "design_space_id": "plant-thermostat-design-space-v1:bc968ac4dcc6165fd23f7d1e2cf70235d174107cddc67705190ed5a0ec586fb5",
+  "evaluation_ledger_schema_version": 1,
+  "evaluation_statistics": {
+    "cache_hits": 98,
+    "candidate_placements": 2482,
+    "dynamic_infeasible_results": 198,
+    "feasible_results": 1611,
+    "mission_calls": 1809,
+    "static_infeasible_results": 575,
+    "unique_fitness_evaluations": 2384
+  },
+  "fitness_codec_id": "fitness-result-v1",
+  "fitness_scenario_id": "fitness-scenario-v1:ea69ada05ce4ec97238d6b80a44583d5995a935ed509058658d95d493f8b0c58",
+  "ga_config": {
+    "crossover_probability": 0.9,
+    "duplicate_retry_limit": 32,
+    "early_stop_patience": 10,
+    "elite_count": 2,
+    "ga_config_id": "ga-config-v1:9b5cdbda49e89f328158b4875663f922c0010ce223adde1cf7f79e850c140ea6",
+    "generation_convention": "max_generations_total_including_generation_zero",
+    "initial_perturbation_scale": 0.05,
+    "material_relative_improvement": 0.0001,
+    "max_generations": 40,
+    "mutation_distribution_index": 20.0,
+    "mutation_probability_per_gene": 0.16666666666666666,
+    "population_size": 64,
+    "random_seed": 20260808,
+    "sbx_distribution_index": 15.0,
+    "schema_version": 1,
+    "tournament_size": 3
+  },
+  "ga_config_id": "ga-config-v1:9b5cdbda49e89f328158b4875663f922c0010ce223adde1cf7f79e850c140ea6",
+  "gene_names": [
+    "wing_area",
+    "aspect_ratio",
+    "engine_rating",
+    "battery_capacity",
+    "thermostat_soc_low",
+    "thermostat_soc_gap"
+  ],
+  "generation_history": [
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:d6d73e2b8e103f1b578991546008ecdcb78d33a929e20406ca6be58bb2b9bfd9",
+      "best_feasible_objective": 48536.880130153375,
+      "best_normalized_infeasible_violation": 0.0005010974954649328,
+      "cumulative_cache_hits": 0,
+      "cumulative_candidate_placements": 64,
+      "cumulative_mission_calls": 30,
+      "cumulative_unique_evaluations": 64,
+      "dynamic_infeasible_count": 19,
+      "elapsed_wall_time_s": 10.046293999999762,
+      "feasible_count": 11,
+      "feasible_fraction": 0.171875,
+      "generation": 0,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.2770299861248384,
+      "median_feasible_objective": 46277.820497826324,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 34,
+      "worst_feasible_objective": 1034.2101466636523
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:d6d73e2b8e103f1b578991546008ecdcb78d33a929e20406ca6be58bb2b9bfd9",
+      "best_feasible_objective": 48536.880130153375,
+      "best_normalized_infeasible_violation": 0.0005010974954649328,
+      "cumulative_cache_hits": 1,
+      "cumulative_candidate_placements": 126,
+      "cumulative_mission_calls": 48,
+      "cumulative_unique_evaluations": 125,
+      "dynamic_infeasible_count": 6,
+      "elapsed_wall_time_s": 17.47120990010444,
+      "feasible_count": 15,
+      "feasible_fraction": 0.234375,
+      "generation": 1,
+      "material_improvement": false,
+      "mean_normalized_gene_diversity": 0.24570590309490883,
+      "median_feasible_objective": 42771.93945992057,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 1,
+      "static_infeasible_count": 43,
+      "worst_feasible_objective": 980.9502135843549
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:d6d73e2b8e103f1b578991546008ecdcb78d33a929e20406ca6be58bb2b9bfd9",
+      "best_feasible_objective": 48536.880130153375,
+      "best_normalized_infeasible_violation": 7.705240130936393e-05,
+      "cumulative_cache_hits": 2,
+      "cumulative_candidate_placements": 188,
+      "cumulative_mission_calls": 74,
+      "cumulative_unique_evaluations": 186,
+      "dynamic_infeasible_count": 18,
+      "elapsed_wall_time_s": 28.58715810009744,
+      "feasible_count": 10,
+      "feasible_fraction": 0.15625,
+      "generation": 2,
+      "material_improvement": false,
+      "mean_normalized_gene_diversity": 0.2261529653078865,
+      "median_feasible_objective": 45938.29797426633,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 2,
+      "static_infeasible_count": 36,
+      "worst_feasible_objective": 4124.489119384751
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:e6f36920034893520166eadbbfcbd72021e2ee09ad82bbc068543de1635a8931",
+      "best_feasible_objective": 49256.37521554405,
+      "best_normalized_infeasible_violation": 7.705240130936393e-05,
+      "cumulative_cache_hits": 2,
+      "cumulative_candidate_placements": 250,
+      "cumulative_mission_calls": 96,
+      "cumulative_unique_evaluations": 248,
+      "dynamic_infeasible_count": 9,
+      "elapsed_wall_time_s": 39.85543500003405,
+      "feasible_count": 15,
+      "feasible_fraction": 0.234375,
+      "generation": 3,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.17958682033654347,
+      "median_feasible_objective": 46032.735809695965,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 40,
+      "worst_feasible_objective": 28300.13437740324
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:2b4b5d74e244edcde5101e5d4eb55a846e2d02b93d4ccda02047917d9e8265d0",
+      "best_feasible_objective": 49327.8586993588,
+      "best_normalized_infeasible_violation": 5.432878727200811e-05,
+      "cumulative_cache_hits": 4,
+      "cumulative_candidate_placements": 312,
+      "cumulative_mission_calls": 126,
+      "cumulative_unique_evaluations": 308,
+      "dynamic_infeasible_count": 4,
+      "elapsed_wall_time_s": 59.19257070007734,
+      "feasible_count": 30,
+      "feasible_fraction": 0.46875,
+      "generation": 4,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.1416846127847435,
+      "median_feasible_objective": 46213.94858205166,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 30,
+      "worst_feasible_objective": 27438.75688511467
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:a859cd855c68cd0c9cf9de510f36b1fe2f6288051227a6299b8371acce274e40",
+      "best_feasible_objective": 49722.87942910312,
+      "best_normalized_infeasible_violation": 4.692277495773093e-05,
+      "cumulative_cache_hits": 6,
+      "cumulative_candidate_placements": 374,
+      "cumulative_mission_calls": 163,
+      "cumulative_unique_evaluations": 368,
+      "dynamic_infeasible_count": 5,
+      "elapsed_wall_time_s": 84.60807519999798,
+      "feasible_count": 36,
+      "feasible_fraction": 0.5625,
+      "generation": 5,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.12460291721889473,
+      "median_feasible_objective": 47809.78925972007,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 23,
+      "worst_feasible_objective": 24736.088638681995
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:7e45713bbba82157e38d9acf8283fd055f35c5d0d08fab5ac79b6ca8ea46e881",
+      "best_feasible_objective": 50887.77444022566,
+      "best_normalized_infeasible_violation": 0.00011459749074049341,
+      "cumulative_cache_hits": 7,
+      "cumulative_candidate_placements": 436,
+      "cumulative_mission_calls": 213,
+      "cumulative_unique_evaluations": 429,
+      "dynamic_infeasible_count": 5,
+      "elapsed_wall_time_s": 120.42352120007854,
+      "feasible_count": 48,
+      "feasible_fraction": 0.75,
+      "generation": 6,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.09997622223931386,
+      "median_feasible_objective": 48565.371099248965,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 11,
+      "worst_feasible_objective": 27254.795458981804
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:d0d8dc6a0c2ddae8a60eb248c585523c432bee3fe4bb2f55879e3400fcdee388",
+      "best_feasible_objective": 51359.68687992803,
+      "best_normalized_infeasible_violation": 0.0017923380872717114,
+      "cumulative_cache_hits": 13,
+      "cumulative_candidate_placements": 498,
+      "cumulative_mission_calls": 257,
+      "cumulative_unique_evaluations": 485,
+      "dynamic_infeasible_count": 7,
+      "elapsed_wall_time_s": 155.46353910001926,
+      "feasible_count": 44,
+      "feasible_fraction": 0.6875,
+      "generation": 7,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.07186113309433619,
+      "median_feasible_objective": 49051.80160551793,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 13,
+      "worst_feasible_objective": 29100.0
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:b3c05c03228754e9182ed93b196f72e48e6f9c4ce139eda112deecb095cef0a9",
+      "best_feasible_objective": 51677.61810908875,
+      "best_normalized_infeasible_violation": 0.0015587021539770704,
+      "cumulative_cache_hits": 14,
+      "cumulative_candidate_placements": 560,
+      "cumulative_mission_calls": 308,
+      "cumulative_unique_evaluations": 546,
+      "dynamic_infeasible_count": 3,
+      "elapsed_wall_time_s": 197.48591460008174,
+      "feasible_count": 51,
+      "feasible_fraction": 0.796875,
+      "generation": 8,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.06466324355612922,
+      "median_feasible_objective": 49210.48750326295,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 10,
+      "worst_feasible_objective": 44098.91463881634
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:b3c05c03228754e9182ed93b196f72e48e6f9c4ce139eda112deecb095cef0a9",
+      "best_feasible_objective": 51677.61810908875,
+      "best_normalized_infeasible_violation": 0.007270250404053826,
+      "cumulative_cache_hits": 16,
+      "cumulative_candidate_placements": 622,
+      "cumulative_mission_calls": 362,
+      "cumulative_unique_evaluations": 606,
+      "dynamic_infeasible_count": 5,
+      "elapsed_wall_time_s": 245.85477340000216,
+      "feasible_count": 53,
+      "feasible_fraction": 0.828125,
+      "generation": 9,
+      "material_improvement": false,
+      "mean_normalized_gene_diversity": 0.041908128588810684,
+      "median_feasible_objective": 50064.8586449522,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 1,
+      "static_infeasible_count": 6,
+      "worst_feasible_objective": 47138.63005419832
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:64656bfd2ae40b31447d7b72fdc457f7ae59581d33bce5ec01db6320c6b60b09",
+      "best_feasible_objective": 51902.5724502789,
+      "best_normalized_infeasible_violation": 0.00036123110304615424,
+      "cumulative_cache_hits": 19,
+      "cumulative_candidate_placements": 684,
+      "cumulative_mission_calls": 413,
+      "cumulative_unique_evaluations": 665,
+      "dynamic_infeasible_count": 3,
+      "elapsed_wall_time_s": 296.74786800006405,
+      "feasible_count": 53,
+      "feasible_fraction": 0.828125,
+      "generation": 10,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.04666085923973972,
+      "median_feasible_objective": 50576.4791018015,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 8,
+      "worst_feasible_objective": 48001.315378337524
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:0b97f7a6b7e3998a2e3fd879526831733c080fb5821ec52152afa39c400faa2c",
+      "best_feasible_objective": 52085.16037996038,
+      "best_normalized_infeasible_violation": 0.00487087498040898,
+      "cumulative_cache_hits": 23,
+      "cumulative_candidate_placements": 746,
+      "cumulative_mission_calls": 462,
+      "cumulative_unique_evaluations": 723,
+      "dynamic_infeasible_count": 3,
+      "elapsed_wall_time_s": 347.30061560007744,
+      "feasible_count": 52,
+      "feasible_fraction": 0.8125,
+      "generation": 11,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.04412877754006741,
+      "median_feasible_objective": 50885.83296620277,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 9,
+      "worst_feasible_objective": 48392.36896325568
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:0d1d187475c16787593c832a375711290988427d94d2904cd4b2d72ac8d97b8a",
+      "best_feasible_objective": 52150.02089784311,
+      "best_normalized_infeasible_violation": 0.0023468729366095736,
+      "cumulative_cache_hits": 27,
+      "cumulative_candidate_placements": 808,
+      "cumulative_mission_calls": 511,
+      "cumulative_unique_evaluations": 781,
+      "dynamic_infeasible_count": 0,
+      "elapsed_wall_time_s": 398.710838100058,
+      "feasible_count": 55,
+      "feasible_fraction": 0.859375,
+      "generation": 12,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.03851114579485975,
+      "median_feasible_objective": 51299.48323146826,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 9,
+      "worst_feasible_objective": 45577.59543463677
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:037695497a8128a9e88ed9a059fc825aad8d1b25abdfdcd7d82c5767778e31e5",
+      "best_feasible_objective": 52302.676505445364,
+      "best_normalized_infeasible_violation": 0.0004967218843800232,
+      "cumulative_cache_hits": 27,
+      "cumulative_candidate_placements": 870,
+      "cumulative_mission_calls": 564,
+      "cumulative_unique_evaluations": 843,
+      "dynamic_infeasible_count": 0,
+      "elapsed_wall_time_s": 456.54170810000505,
+      "feasible_count": 55,
+      "feasible_fraction": 0.859375,
+      "generation": 13,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.03816607272918296,
+      "median_feasible_objective": 51504.187901286256,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 9,
+      "worst_feasible_objective": 47963.88532806311
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:037695497a8128a9e88ed9a059fc825aad8d1b25abdfdcd7d82c5767778e31e5",
+      "best_feasible_objective": 52302.676505445364,
+      "best_normalized_infeasible_violation": 0.0035667254844489703,
+      "cumulative_cache_hits": 34,
+      "cumulative_candidate_placements": 932,
+      "cumulative_mission_calls": 610,
+      "cumulative_unique_evaluations": 898,
+      "dynamic_infeasible_count": 5,
+      "elapsed_wall_time_s": 507.55236020009033,
+      "feasible_count": 50,
+      "feasible_fraction": 0.78125,
+      "generation": 14,
+      "material_improvement": false,
+      "mean_normalized_gene_diversity": 0.0426554354221454,
+      "median_feasible_objective": 51703.51424373836,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 1,
+      "static_infeasible_count": 9,
+      "worst_feasible_objective": 49160.58234624065
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:cc441dc6a8c25fa88819f8f59b3a639efaf32d2e6b84d938f638ca91bbc76a70",
+      "best_feasible_objective": 53433.7053142426,
+      "best_normalized_infeasible_violation": 0.0003015301313009816,
+      "cumulative_cache_hits": 35,
+      "cumulative_candidate_placements": 994,
+      "cumulative_mission_calls": 662,
+      "cumulative_unique_evaluations": 959,
+      "dynamic_infeasible_count": 2,
+      "elapsed_wall_time_s": 567.0005586000625,
+      "feasible_count": 53,
+      "feasible_fraction": 0.828125,
+      "generation": 15,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.04513592138226582,
+      "median_feasible_objective": 51814.935017068856,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 9,
+      "worst_feasible_objective": 48989.54179105986
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:235cc07114933c376e0bb99d3122657573f1a196066179b11616b45dea1cd17e",
+      "best_feasible_objective": 53607.03845062409,
+      "best_normalized_infeasible_violation": 0.000543210458399751,
+      "cumulative_cache_hits": 39,
+      "cumulative_candidate_placements": 1056,
+      "cumulative_mission_calls": 709,
+      "cumulative_unique_evaluations": 1017,
+      "dynamic_infeasible_count": 5,
+      "elapsed_wall_time_s": 620.8863142000046,
+      "feasible_count": 48,
+      "feasible_fraction": 0.75,
+      "generation": 16,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.04706228007805311,
+      "median_feasible_objective": 52183.41284764107,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 11,
+      "worst_feasible_objective": 49266.15875117109
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:a68f1ce2714c5727371f59020aaf5f8c183d89bceeccc31b29e2fab07150693a",
+      "best_feasible_objective": 53757.16588078054,
+      "best_normalized_infeasible_violation": 8.67529668899487e-05,
+      "cumulative_cache_hits": 41,
+      "cumulative_candidate_placements": 1118,
+      "cumulative_mission_calls": 758,
+      "cumulative_unique_evaluations": 1077,
+      "dynamic_infeasible_count": 0,
+      "elapsed_wall_time_s": 681.3934512000997,
+      "feasible_count": 53,
+      "feasible_fraction": 0.828125,
+      "generation": 17,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.04047943229445864,
+      "median_feasible_objective": 52662.84050523788,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 11,
+      "worst_feasible_objective": 49184.77280439309
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:7d2488f27cbfe4ae050199cc0f6c1df714d4628bc0f02f901dd84b808128fca9",
+      "best_feasible_objective": 53832.08499637987,
+      "best_normalized_infeasible_violation": 0.0038280384797374197,
+      "cumulative_cache_hits": 41,
+      "cumulative_candidate_placements": 1180,
+      "cumulative_mission_calls": 811,
+      "cumulative_unique_evaluations": 1139,
+      "dynamic_infeasible_count": 1,
+      "elapsed_wall_time_s": 742.6931757000275,
+      "feasible_count": 54,
+      "feasible_fraction": 0.84375,
+      "generation": 18,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.03968728626684499,
+      "median_feasible_objective": 53094.215774245735,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 9,
+      "worst_feasible_objective": 48733.34313147556
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:faf710c7768b17e7017bd79596901fb513cc4eadd784da66aa7f4620212b748b",
+      "best_feasible_objective": 53855.22890201043,
+      "best_normalized_infeasible_violation": 0.0014971408203058932,
+      "cumulative_cache_hits": 45,
+      "cumulative_candidate_placements": 1242,
+      "cumulative_mission_calls": 864,
+      "cumulative_unique_evaluations": 1197,
+      "dynamic_infeasible_count": 4,
+      "elapsed_wall_time_s": 808.199842400034,
+      "feasible_count": 55,
+      "feasible_fraction": 0.859375,
+      "generation": 19,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.036159244987085164,
+      "median_feasible_objective": 53219.02571144072,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 5,
+      "worst_feasible_objective": 50702.51162303944
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:0cb38c77501a72dc3346ddbf01fac5fb723c3dc24a030d24a99c4f58ee1fe311",
+      "best_feasible_objective": 53948.55100140328,
+      "best_normalized_infeasible_violation": 0.0011638986594339669,
+      "cumulative_cache_hits": 46,
+      "cumulative_candidate_placements": 1304,
+      "cumulative_mission_calls": 913,
+      "cumulative_unique_evaluations": 1258,
+      "dynamic_infeasible_count": 3,
+      "elapsed_wall_time_s": 871.2724393000826,
+      "feasible_count": 49,
+      "feasible_fraction": 0.765625,
+      "generation": 20,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.037679357482423466,
+      "median_feasible_objective": 53353.36363526018,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 12,
+      "worst_feasible_objective": 51367.50874082234
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:466a682f225656a73f820446626887389002c4269033a78ca0618cff4f4aee67",
+      "best_feasible_objective": 54000.0,
+      "best_normalized_infeasible_violation": 0.0011237668222539522,
+      "cumulative_cache_hits": 52,
+      "cumulative_candidate_placements": 1366,
+      "cumulative_mission_calls": 966,
+      "cumulative_unique_evaluations": 1314,
+      "dynamic_infeasible_count": 4,
+      "elapsed_wall_time_s": 937.3166489000432,
+      "feasible_count": 57,
+      "feasible_fraction": 0.890625,
+      "generation": 21,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.036661137505191135,
+      "median_feasible_objective": 53551.589098722594,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 3,
+      "worst_feasible_objective": 47596.92569537114
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:9f377a09b818b082352cd447d963ede4da61560df2e56fb5d0e7e451d0026e8f",
+      "best_feasible_objective": 54167.25971605903,
+      "best_normalized_infeasible_violation": 0.0006748883325009636,
+      "cumulative_cache_hits": 55,
+      "cumulative_candidate_placements": 1428,
+      "cumulative_mission_calls": 1016,
+      "cumulative_unique_evaluations": 1373,
+      "dynamic_infeasible_count": 4,
+      "elapsed_wall_time_s": 999.6400129999965,
+      "feasible_count": 51,
+      "feasible_fraction": 0.796875,
+      "generation": 22,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.03976769779160735,
+      "median_feasible_objective": 53671.99814784543,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 9,
+      "worst_feasible_objective": 49880.89111935874
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:6a4713cc4cf71bf87ec7887a5ae74005d9dcd02ff8e92a7f09cee9052a5de09c",
+      "best_feasible_objective": 54171.84403206955,
+      "best_normalized_infeasible_violation": 0.00021763533960663455,
+      "cumulative_cache_hits": 59,
+      "cumulative_candidate_placements": 1490,
+      "cumulative_mission_calls": 1066,
+      "cumulative_unique_evaluations": 1431,
+      "dynamic_infeasible_count": 1,
+      "elapsed_wall_time_s": 1066.5980604999932,
+      "feasible_count": 55,
+      "feasible_fraction": 0.859375,
+      "generation": 23,
+      "material_improvement": false,
+      "mean_normalized_gene_diversity": 0.03590923931388815,
+      "median_feasible_objective": 53615.63499114706,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 1,
+      "static_infeasible_count": 8,
+      "worst_feasible_objective": 51038.273689916576
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:6a4713cc4cf71bf87ec7887a5ae74005d9dcd02ff8e92a7f09cee9052a5de09c",
+      "best_feasible_objective": 54171.84403206955,
+      "best_normalized_infeasible_violation": 0.0048827424081177495,
+      "cumulative_cache_hits": 63,
+      "cumulative_candidate_placements": 1552,
+      "cumulative_mission_calls": 1113,
+      "cumulative_unique_evaluations": 1489,
+      "dynamic_infeasible_count": 3,
+      "elapsed_wall_time_s": 1128.9589449000778,
+      "feasible_count": 50,
+      "feasible_fraction": 0.78125,
+      "generation": 24,
+      "material_improvement": false,
+      "mean_normalized_gene_diversity": 0.045044843289976745,
+      "median_feasible_objective": 53593.0324579643,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 2,
+      "static_infeasible_count": 11,
+      "worst_feasible_objective": 46240.424124739366
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:6a4713cc4cf71bf87ec7887a5ae74005d9dcd02ff8e92a7f09cee9052a5de09c",
+      "best_feasible_objective": 54171.84403206955,
+      "best_normalized_infeasible_violation": 0.0004402475020850001,
+      "cumulative_cache_hits": 63,
+      "cumulative_candidate_placements": 1614,
+      "cumulative_mission_calls": 1165,
+      "cumulative_unique_evaluations": 1551,
+      "dynamic_infeasible_count": 3,
+      "elapsed_wall_time_s": 1196.3065825999947,
+      "feasible_count": 51,
+      "feasible_fraction": 0.796875,
+      "generation": 25,
+      "material_improvement": false,
+      "mean_normalized_gene_diversity": 0.04483738279194027,
+      "median_feasible_objective": 53516.441072511036,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 3,
+      "static_infeasible_count": 10,
+      "worst_feasible_objective": 47905.782611935516
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:6a4713cc4cf71bf87ec7887a5ae74005d9dcd02ff8e92a7f09cee9052a5de09c",
+      "best_feasible_objective": 54171.84403206955,
+      "best_normalized_infeasible_violation": 8.624964345673487e-05,
+      "cumulative_cache_hits": 65,
+      "cumulative_candidate_placements": 1676,
+      "cumulative_mission_calls": 1212,
+      "cumulative_unique_evaluations": 1611,
+      "dynamic_infeasible_count": 4,
+      "elapsed_wall_time_s": 1259.0224538000766,
+      "feasible_count": 47,
+      "feasible_fraction": 0.734375,
+      "generation": 26,
+      "material_improvement": false,
+      "mean_normalized_gene_diversity": 0.04020211712024144,
+      "median_feasible_objective": 53511.870473698065,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 4,
+      "static_infeasible_count": 13,
+      "worst_feasible_objective": 49084.325512377836
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:25dc33efe479e5f210a3fd2f5e7b146643509c12b7d5f1a75aa242cd12aa45de",
+      "best_feasible_objective": 54241.95709160702,
+      "best_normalized_infeasible_violation": 0.00011204725736782769,
+      "cumulative_cache_hits": 65,
+      "cumulative_candidate_placements": 1738,
+      "cumulative_mission_calls": 1269,
+      "cumulative_unique_evaluations": 1673,
+      "dynamic_infeasible_count": 6,
+      "elapsed_wall_time_s": 1331.7157383000012,
+      "feasible_count": 53,
+      "feasible_fraction": 0.828125,
+      "generation": 27,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.0372937288777561,
+      "median_feasible_objective": 53630.72015693682,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 5,
+      "worst_feasible_objective": 50880.0
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:68f98fb812c2a6fd9fa9d7fcf5535e0d86cbd3d9a2415db73ba2383d25a9248a",
+      "best_feasible_objective": 54279.65645214104,
+      "best_normalized_infeasible_violation": 0.000296806514763316,
+      "cumulative_cache_hits": 66,
+      "cumulative_candidate_placements": 1800,
+      "cumulative_mission_calls": 1313,
+      "cumulative_unique_evaluations": 1734,
+      "dynamic_infeasible_count": 10,
+      "elapsed_wall_time_s": 1389.2866857000627,
+      "feasible_count": 37,
+      "feasible_fraction": 0.578125,
+      "generation": 28,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.04287758331741041,
+      "median_feasible_objective": 53554.96594968924,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 17,
+      "worst_feasible_objective": 49141.20687249313
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:68f98fb812c2a6fd9fa9d7fcf5535e0d86cbd3d9a2415db73ba2383d25a9248a",
+      "best_feasible_objective": 54279.65645214104,
+      "best_normalized_infeasible_violation": 0.0016026254447440826,
+      "cumulative_cache_hits": 68,
+      "cumulative_candidate_placements": 1862,
+      "cumulative_mission_calls": 1358,
+      "cumulative_unique_evaluations": 1794,
+      "dynamic_infeasible_count": 5,
+      "elapsed_wall_time_s": 1450.681546500069,
+      "feasible_count": 44,
+      "feasible_fraction": 0.6875,
+      "generation": 29,
+      "material_improvement": false,
+      "mean_normalized_gene_diversity": 0.04275056921512332,
+      "median_feasible_objective": 53626.057184326215,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 1,
+      "static_infeasible_count": 15,
+      "worst_feasible_objective": 49673.60947288475
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:fc1d8bdbb415d312f024465da59b6fac423344bcb66622e7ffc1343ea35a9133",
+      "best_feasible_objective": 54656.696984144124,
+      "best_normalized_infeasible_violation": 0.001218525663723165,
+      "cumulative_cache_hits": 71,
+      "cumulative_candidate_placements": 1924,
+      "cumulative_mission_calls": 1405,
+      "cumulative_unique_evaluations": 1853,
+      "dynamic_infeasible_count": 5,
+      "elapsed_wall_time_s": 1513.0240095000481,
+      "feasible_count": 47,
+      "feasible_fraction": 0.734375,
+      "generation": 30,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.049672142501084204,
+      "median_feasible_objective": 53684.59763719916,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 12,
+      "worst_feasible_objective": 51075.319927561715
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:fc1d8bdbb415d312f024465da59b6fac423344bcb66622e7ffc1343ea35a9133",
+      "best_feasible_objective": 54656.696984144124,
+      "best_normalized_infeasible_violation": 0.0022575858914637417,
+      "cumulative_cache_hits": 74,
+      "cumulative_candidate_placements": 1986,
+      "cumulative_mission_calls": 1447,
+      "cumulative_unique_evaluations": 1912,
+      "dynamic_infeasible_count": 5,
+      "elapsed_wall_time_s": 1571.5332648000913,
+      "feasible_count": 42,
+      "feasible_fraction": 0.65625,
+      "generation": 31,
+      "material_improvement": false,
+      "mean_normalized_gene_diversity": 0.04867446100854048,
+      "median_feasible_objective": 53518.12786992266,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 1,
+      "static_infeasible_count": 17,
+      "worst_feasible_objective": 51753.74014702831
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:fc1d8bdbb415d312f024465da59b6fac423344bcb66622e7ffc1343ea35a9133",
+      "best_feasible_objective": 54656.696984144124,
+      "best_normalized_infeasible_violation": 0.0005279716421224612,
+      "cumulative_cache_hits": 77,
+      "cumulative_candidate_placements": 2048,
+      "cumulative_mission_calls": 1499,
+      "cumulative_unique_evaluations": 1971,
+      "dynamic_infeasible_count": 4,
+      "elapsed_wall_time_s": 1643.0968721000245,
+      "feasible_count": 53,
+      "feasible_fraction": 0.828125,
+      "generation": 32,
+      "material_improvement": false,
+      "mean_normalized_gene_diversity": 0.04768981064255276,
+      "median_feasible_objective": 53427.999381933114,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 2,
+      "static_infeasible_count": 7,
+      "worst_feasible_objective": 50451.78709664516
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:fce6be2cb3427ede9e8777c2d44dbe5d7ea19d75e5bc90e8d13da4abb9e70ebf",
+      "best_feasible_objective": 54697.503211681935,
+      "best_normalized_infeasible_violation": 4.403960679474109e-05,
+      "cumulative_cache_hits": 80,
+      "cumulative_candidate_placements": 2110,
+      "cumulative_mission_calls": 1540,
+      "cumulative_unique_evaluations": 2030,
+      "dynamic_infeasible_count": 6,
+      "elapsed_wall_time_s": 1696.0144488000078,
+      "feasible_count": 40,
+      "feasible_fraction": 0.625,
+      "generation": 33,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.05139218946110661,
+      "median_feasible_objective": 53749.72280136223,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 18,
+      "worst_feasible_objective": 48454.12708972093
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:9c61a012a18a89549e92bc8f689d0ec12ff07f77f9826ca2ca2f8dda6abba972",
+      "best_feasible_objective": 54697.58120358871,
+      "best_normalized_infeasible_violation": 5.367246484595381e-05,
+      "cumulative_cache_hits": 85,
+      "cumulative_candidate_placements": 2172,
+      "cumulative_mission_calls": 1583,
+      "cumulative_unique_evaluations": 2087,
+      "dynamic_infeasible_count": 3,
+      "elapsed_wall_time_s": 1758.47055930004,
+      "feasible_count": 47,
+      "feasible_fraction": 0.734375,
+      "generation": 34,
+      "material_improvement": false,
+      "mean_normalized_gene_diversity": 0.05112147359770532,
+      "median_feasible_objective": 53904.64275280604,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 1,
+      "static_infeasible_count": 14,
+      "worst_feasible_objective": 47519.060227736765
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:56b7e2fa5b5824a6dc5a20ca0d2bdadd86a2dd2348684a4bc989f1e743b94dad",
+      "best_feasible_objective": 54798.121719723094,
+      "best_normalized_infeasible_violation": 0.00679174228079934,
+      "cumulative_cache_hits": 88,
+      "cumulative_candidate_placements": 2234,
+      "cumulative_mission_calls": 1633,
+      "cumulative_unique_evaluations": 2146,
+      "dynamic_infeasible_count": 9,
+      "elapsed_wall_time_s": 1826.1079926000675,
+      "feasible_count": 46,
+      "feasible_fraction": 0.71875,
+      "generation": 35,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.048475870182553754,
+      "median_feasible_objective": 53866.89260518783,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 9,
+      "worst_feasible_objective": 46393.756475737
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:07d5e543c1b0612b7d9631eaaa40c8dbbd6494160bdea71a7d50f1a0b8d9c227",
+      "best_feasible_objective": 54848.22915899992,
+      "best_normalized_infeasible_violation": 0.000684500404969262,
+      "cumulative_cache_hits": 91,
+      "cumulative_candidate_placements": 2296,
+      "cumulative_mission_calls": 1679,
+      "cumulative_unique_evaluations": 2205,
+      "dynamic_infeasible_count": 8,
+      "elapsed_wall_time_s": 1888.6465630000457,
+      "feasible_count": 43,
+      "feasible_fraction": 0.671875,
+      "generation": 36,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.047855391634987234,
+      "median_feasible_objective": 53992.62342147079,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 13,
+      "worst_feasible_objective": 48179.02016313759
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:fc775c5d0a07065a60a98ae0983ea77b1c7a9390f298f0639b43709a15b7af53",
+      "best_feasible_objective": 54881.83573323673,
+      "best_normalized_infeasible_violation": 2.7738063337164904e-05,
+      "cumulative_cache_hits": 94,
+      "cumulative_candidate_placements": 2358,
+      "cumulative_mission_calls": 1722,
+      "cumulative_unique_evaluations": 2264,
+      "dynamic_infeasible_count": 5,
+      "elapsed_wall_time_s": 1949.4913116000826,
+      "feasible_count": 43,
+      "feasible_fraction": 0.671875,
+      "generation": 37,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.044897456452555336,
+      "median_feasible_objective": 53987.42344143293,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 16,
+      "worst_feasible_objective": 48061.742585200955
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:3782f8ea38b57d45e61fe5d1d0b3cb2eb07e6d3764c4e7274e0b03347de38ac8",
+      "best_feasible_objective": 54927.87406455872,
+      "best_normalized_infeasible_violation": 0.00015332354625829478,
+      "cumulative_cache_hits": 96,
+      "cumulative_candidate_placements": 2420,
+      "cumulative_mission_calls": 1765,
+      "cumulative_unique_evaluations": 2324,
+      "dynamic_infeasible_count": 1,
+      "elapsed_wall_time_s": 2009.5025579000358,
+      "feasible_count": 46,
+      "feasible_fraction": 0.71875,
+      "generation": 38,
+      "material_improvement": true,
+      "mean_normalized_gene_diversity": 0.04363122667667766,
+      "median_feasible_objective": 54170.15282309463,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 0,
+      "static_infeasible_count": 17,
+      "worst_feasible_objective": 48388.01429576532
+    },
+    {
+      "best_chromosome_key": "plant-thermostat-chromosome-v1:3782f8ea38b57d45e61fe5d1d0b3cb2eb07e6d3764c4e7274e0b03347de38ac8",
+      "best_feasible_objective": 54927.87406455872,
+      "best_normalized_infeasible_violation": 3.2656256092429517e-05,
+      "cumulative_cache_hits": 98,
+      "cumulative_candidate_placements": 2482,
+      "cumulative_mission_calls": 1809,
+      "cumulative_unique_evaluations": 2384,
+      "dynamic_infeasible_count": 5,
+      "elapsed_wall_time_s": 2069.1754103000276,
+      "feasible_count": 43,
+      "feasible_fraction": 0.671875,
+      "generation": 39,
+      "material_improvement": false,
+      "mean_normalized_gene_diversity": 0.03983499981404342,
+      "median_feasible_objective": 54408.703964866225,
+      "population_size": 64,
+      "run_seed": 20260808,
+      "stagnation_counter": 1,
+      "static_infeasible_count": 16,
+      "worst_feasible_objective": 46101.742811431584
+    }
+  ],
+  "population": [
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:3782f8ea38b57d45e61fe5d1d0b3cb2eb07e6d3764c4e7274e0b03347de38ac8",
+      "evaluation_key": "fitness-evaluation-v1:de78c4947360d70a8bb0f6807e2a875a5b851f136d4fe1d22973b39d95301c3f",
+      "genes": [
+        0.30227374203316854,
+        0.9031772422046703,
+        0.29252574978674106,
+        0.13372564579449855,
+        0.28802960668814215,
+        0.5335666563306112
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:fc775c5d0a07065a60a98ae0983ea77b1c7a9390f298f0639b43709a15b7af53",
+      "evaluation_key": "fitness-evaluation-v1:af31fb732440b84987d2c815f7946be420e5046cd425693e7956df74b2dc985e",
+      "genes": [
+        0.30227374203316854,
+        0.9031772422046703,
+        0.29252574978674106,
+        0.13372564579449855,
+        0.28802960668814215,
+        0.3317079661608189
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:510df403ad127e7d6685525814225af3b6bcbeaddb03900f21a4afb93d2363ed",
+      "evaluation_key": "fitness-evaluation-v1:69458bf60ad05c76074a1361b47b9d57775b84a1ff984b49da3a548b9908c031",
+      "genes": [
+        0.2624853040077561,
+        0.9055700475205339,
+        0.2913525658041466,
+        0.16407998958701447,
+        0.3085173167484375,
+        0.3098837149651092
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:8e64a06fc3d179be524a56525e47d0bb6c93e5020d02321b9a2d036c033a724e",
+      "evaluation_key": "fitness-evaluation-v1:67813f2790d6f827f410f2f29adf7ee508ac5570d9e3cdb666a8d8aee1ebe2c0",
+      "genes": [
+        0.29851604723203956,
+        0.9227243009847692,
+        0.29249642612027493,
+        0.13378188077513378,
+        0.3460292050429876,
+        0.28466336629009603
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:16c3f9e6b416ae8440844ac0d5e4cdb0308266315579d0386c261dad7973c27a",
+      "evaluation_key": "fitness-evaluation-v1:844033a2b180d2f49235c8b1435f7a3b6ab86b8a63987cdef4f6bfb1d8c8a417",
+      "genes": [
+        0.29790986331917374,
+        0.9414552539910003,
+        0.29253270375490137,
+        0.1269042474015337,
+        0.3949623393298834,
+        0.2888906163360173
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:97296b430db2d274885120f1734feb265c4e83384266995b58edf3e60c3ef1c2",
+      "evaluation_key": "fitness-evaluation-v1:ace75671169a8f2a6bec77f9f840fcfb16c929acca111e212e6eb929d6084af5",
+      "genes": [
+        0.29851571370564683,
+        0.9059831040269445,
+        0.29249795512784815,
+        0.13379190057326237,
+        0.2808290626420058,
+        0.3400241466508004
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:2ef18e921e142dc4ee942de034eed7e22c7a849d1607e9aeb5615512aec58ded",
+      "evaluation_key": "fitness-evaluation-v1:e66c6eecc5e38b4eaa0915bd7a42e3684cc3015866f5759652ddc057944005d8",
+      "genes": [
+        0.29790986331917374,
+        0.9222765826373672,
+        0.2925049516895642,
+        0.12687878402682382,
+        0.3525303049034389,
+        0.2845030995091973
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:3f7a4f9bdf7102eb1d4cc979900c9691418aa5ecb094d545f6f90284b1b5061a",
+      "evaluation_key": "fitness-evaluation-v1:687338d0fee903a739b1c6794be35c4c37aac948f550da39f750bd4e37b6aa0f",
+      "genes": [
+        0.29771773102417415,
+        0.9035120445806087,
+        0.2914092720811576,
+        0.13379190057326237,
+        0.3499799675892981,
+        0.3328601186365736
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:df21ac9324a6a676feb6a3dba119e69c8f6d6ed55e123451d6499a6508f75c2a",
+      "evaluation_key": "fitness-evaluation-v1:78bd82e52174c5d17db6fd9726abf4645bcd9b7973bbb552336781f6241ec76e",
+      "genes": [
+        0.2985160431152221,
+        0.9014420106337926,
+        0.2909697196824865,
+        0.025785471913080588,
+        0.3462442873254766,
+        0.3482991134879049
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:cb92922fd4d431b25786f8a6b647899e5d9571c98e92af776f5dbc624975d636",
+      "evaluation_key": "fitness-evaluation-v1:1d4c238dc2789f2e9234bf9baed048876db8d38c8bf9a209b90a17406cd1c518",
+      "genes": [
+        0.2813692376233318,
+        0.9056289307345,
+        0.29244753667112033,
+        0.14987436748340804,
+        0.3289980760984971,
+        0.32782405230361833
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:e9ece7b4bdb78e1fae32023213715174e5902714817bc63d350bebd71c12b540",
+      "evaluation_key": "fitness-evaluation-v1:32cc993eb40c8768fbdb6415a9adfacaab5dd6ce1cfb1db9cc3ab532a6998fe5",
+      "genes": [
+        0.2978993390045389,
+        0.9564946365964142,
+        0.293386764178215,
+        0.124558348829135,
+        0.3493771842881563,
+        0.1549106567376432
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:cea7ede1c02ea20ceb4b8a102792c8bd5ecb19d3574f1d647d24e7544e33f98d",
+      "evaluation_key": "fitness-evaluation-v1:5006142ddb4e599c33700a4d24bc977975503d66e2485c5213463f842361b17d",
+      "genes": [
+        0.2992115098233219,
+        0.90552145628621,
+        0.29253270375490137,
+        0.1269042474015337,
+        0.39492330844648266,
+        0.3396135301356399
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:5e50216614fe35c51a8a67af6d39bef91e75874619ea25c622899953a9340cd0",
+      "evaluation_key": "fitness-evaluation-v1:420f015b5e05a6ee99824dc6b9dbc15cb94346c7a578b096e2d333e93bb35a70",
+      "genes": [
+        0.2985156511529916,
+        0.947259602443433,
+        0.29339136751739264,
+        0.13437613769004106,
+        0.21474880560234683,
+        0.3380434095743369
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:693465cb7616933e0954a31607eb2864ed0afad9162c1747438ef4f26682bc6d",
+      "evaluation_key": "fitness-evaluation-v1:7b4f0df9758240c87590a9a2d06b43d10d3975bd788f0d630d9cfd232034dc2d",
+      "genes": [
+        0.2985159959688879,
+        0.8875214153779951,
+        0.29147613198492806,
+        0.13380734414984366,
+        0.34714575097971667,
+        0.15410589383249973
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:d8048c8aa0265b8f2f5e1ed60886950ceb729f72d3b30ad250bc7f3019068049",
+      "evaluation_key": "fitness-evaluation-v1:26e8fe6faa8b59d05eebb81d211491a923d8223f917832b04d9acd6b2c516686",
+      "genes": [
+        0.2985160423460649,
+        0.9015847363147528,
+        0.2618169825196535,
+        0.14922964402596467,
+        0.35305358100606377,
+        0.33187962399287757
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:8b71d765d123d6d22520f9f49d6120f6eee99f7aaaf47b357faef89bff3f5072",
+      "evaluation_key": "fitness-evaluation-v1:d58c7e439950ff15d215b768004bf52617b3a15adef3684c903caba4cb183945",
+      "genes": [
+        0.2813692376233318,
+        0.9054862050535398,
+        0.2925297344562668,
+        0.13458890788330952,
+        0.39296963732356055,
+        0.34863042685442996
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:eda49fc65adbac7a741b396884d38a558354d0eddc704a4166666e2e1bcfd86d",
+      "evaluation_key": "fitness-evaluation-v1:1ef2f00f9e07a415a9005ec041793314733547a331eb85c2c3345efef52d5c67",
+      "genes": [
+        0.2985160431152221,
+        0.9055731112884869,
+        0.28406138785180546,
+        0.13380734414984366,
+        0.3460292050429876,
+        0.33862202208196457
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:37e2902e0c619d7079df89e0802a366904f31c89dd4f51a085ce158a3e71b5d9",
+      "evaluation_key": "fitness-evaluation-v1:bbc9423686d29739160f7c3da515933cef9c82ea87e47e3f5bf2894fb64e6d6e",
+      "genes": [
+        0.2985160431152221,
+        0.9055731112884869,
+        0.29249795512784815,
+        0.13380734414984366,
+        0.3460292050429876,
+        0.33862202208196457
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:3d9074450cacb0bcb857c2a214689225b23d28d2515b7d6d2c8fd4f5b004e524",
+      "evaluation_key": "fitness-evaluation-v1:c8a20be853cfd7a27ac1c318188c677889343c707282c1b23ee6bd62c99379cb",
+      "genes": [
+        0.2963942918553162,
+        0.9045521652546428,
+        0.2925176422445708,
+        0.1249279370874254,
+        0.34199826256218246,
+        0.33867060409183586
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:2864e0dedde28b66563dab73e3af732981f02b383b5e702b29dd8a701a46e795",
+      "evaluation_key": "fitness-evaluation-v1:41a0be10f25ef4f53914b00431afc642c905ee2de55dd992394654256239a0c1",
+      "genes": [
+        0.29856498556266653,
+        0.9019524393516803,
+        0.2914404483237534,
+        0.11393508224742491,
+        0.40375108070784227,
+        0.33785210145138117
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:cd32d2b349053c33cbf21cf26da1b6387e64b8bc7f66a8ebcf12a42ad3f33edf",
+      "evaluation_key": "fitness-evaluation-v1:6981fb3e86d486c7fea410f3502764a8416113acedd1c4ded2ae489328336748",
+      "genes": [
+        0.2714232652704913,
+        0.9188906598103024,
+        0.29260856148099207,
+        0.13372564579449855,
+        0.2881271916702917,
+        0.5709714529194622
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:11684c1472c9094eef36f5137092f2aeb0cb103322be14e7eb36ac0941aa7a02",
+      "evaluation_key": "fitness-evaluation-v1:f7fc60499f9a5b73efc37186815bc410815f536fa22aee991476cabfea4e5de8",
+      "genes": [
+        0.30170544431726987,
+        0.9031419262984197,
+        0.29160525000529375,
+        0.038896243169100314,
+        0.35210970527455004,
+        0.3611906771370802
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:5bba60e35b50a29a772a75e8d3dddb5ec1ffb7d5f72db23abfdb3cdb99dee870",
+      "evaluation_key": "fitness-evaluation-v1:f00421d570f4fb1c826df5d6ba01b3bdf8c68f338fdf265b4c848712daf1854f",
+      "genes": [
+        0.29849952725121853,
+        0.9958716651760194,
+        0.29140359491810514,
+        0.09703057639912926,
+        0.2795073191050283,
+        0.3341980918258769
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:39da2fcedb7eb4ec42241ce6aa725f62ed099e5aad88ee6bdcb750adb0ebec96",
+      "evaluation_key": "fitness-evaluation-v1:8d1d496d36b1565d0def6baa2f0b274c79d61f047cd5adeed83151520c5463ce",
+      "genes": [
+        0.29849952725121853,
+        0.9702988225310893,
+        0.3546248508952226,
+        0.12627352980743123,
+        0.30483660772458304,
+        0.3341980918258769
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:646aa31e8b94f21ecea9d83484cf97d68d730f930f4234a2bfd9cf74dd862d46",
+      "evaluation_key": "fitness-evaluation-v1:200d9e5cea34e80f592bdd0622583b48a2ab55c8e485c71916dabfddeab13304",
+      "genes": [
+        0.2984951163955306,
+        0.9522684828024728,
+        0.29142823960720643,
+        0.12653961192360513,
+        0.35252294002539053,
+        0.28568001706729773
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:7083c73acc1ffbf5b9eaa768198033e702189ac9b6ba5f69dabbeefc81405597",
+      "evaluation_key": "fitness-evaluation-v1:f993c56feb0db36bb1be14a14dae6a95e0e58ef422607c144eac91ff4c5ecbb2",
+      "genes": [
+        0.29791184035612506,
+        0.9226726459824922,
+        0.3147301256102325,
+        0.12687878402682382,
+        0.30258691207555477,
+        0.28565496647296307
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:916d26ce0a1477abfb151abdeb9a9756be6cbfd74919dea967c6a1f26299e19c",
+      "evaluation_key": "fitness-evaluation-v1:3b5faff05d28e69aeaeaf829fec23c4e595c3a8f056da0f89cf96d4e44b62b0d",
+      "genes": [
+        0.2985160431152221,
+        0.846412755194805,
+        0.2748207043008195,
+        0.13380734414984366,
+        0.3460292050429876,
+        0.4141397420076901
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:431dd5f39db47cfa4817d312ade12e03bf3ea29b2e1caa5e2abc4b87d51a5d59",
+      "evaluation_key": "fitness-evaluation-v1:e55b17299d78dc686eda69f57a7c91073013c737c3e4745c561678e8fc8d3d1b",
+      "genes": [
+        0.2985032757026295,
+        0.9032339043491731,
+        0.29252574978674106,
+        0.13372336502758764,
+        0.3455711623652605,
+        0.38125444655945007
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:fea30eedc8d641d375de016c711b89ace7928b8da6d8bd804ba10ae2d67d7bd6",
+      "evaluation_key": "fitness-evaluation-v1:13034bdbfcbe2353878af0ce9b80b35c6c1a3e72e69574439c9875a0b9ab4114",
+      "genes": [
+        0.36898025673927143,
+        0.9055164491439842,
+        0.29249795512784815,
+        0.06170347823425121,
+        0.2884876493658693,
+        0.33140618049328396
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:b1dc45f16b68e0ad2f7733f8dd90eddc2cfa0453e5cf963659f1443a47531d9a",
+      "evaluation_key": "fitness-evaluation-v1:ef257b0526dd84659b89ea82a7c8a84ebc4d0970c1e276dc53412626755b00e5",
+      "genes": [
+        0.3023608719046218,
+        0.9031772422046703,
+        0.29252574978674106,
+        0.16448788231340042,
+        0.28802960668814215,
+        0.3317079661608189
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:c6ad7a3772963f50a5b3b7f19b3e714cd20b142d6a0d4fe5a14d38ba9a71a39d",
+      "evaluation_key": "fitness-evaluation-v1:5bb530a432afd6c2bc025b54d2adeb8b9d7e685a77e9d1de5071053fc8caca7b",
+      "genes": [
+        0.2984093590266119,
+        0.9203949079174565,
+        0.2924723856204666,
+        0.13339694374141695,
+        0.3235879835331625,
+        0.24600536618761787
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:fb026d770e1d8819da52f5ffcac4410b68d75fa686c1fbfd47a1ffed9c86a986",
+      "evaluation_key": "fitness-evaluation-v1:500a9be0e269b2b7ddff107fa11e9c1aa77d0a11b7fe192785c9f4db6c26cc19",
+      "genes": [
+        0.30246681336769643,
+        0.8966006222896079,
+        0.292525496770966,
+        0.13380734414984366,
+        0.2883826704284629,
+        0.3386328804336776
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:677c49496546fa82cd2b44f0d92cdb6f5ec4e7d3758bd1788b57f03db7dd3ad8",
+      "evaluation_key": "fitness-evaluation-v1:d695a4fc55d2daab305d219f843687e4d17056cdf149fadf43798e9d42a248c1",
+      "genes": [
+        0.12147012253271972,
+        0.9057562230803428,
+        0.2924982081436232,
+        0.13372564579449855,
+        0.3456761413026669,
+        0.33169710780910583
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:601615cb1a529d7dfceae29ad03693e26839a3d438cbeab434d97e04f3395d3f",
+      "evaluation_key": "fitness-evaluation-v1:589329a82835e415b3a4ad707ee5130901b097d9f55908a12cf7986e6c3d8bbf",
+      "genes": [
+        0.3668170724746385,
+        0.9226726309138342,
+        0.293406708560097,
+        0.19496167882504167,
+        0.31459819296216307,
+        0.311572498949378
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:35df39bea0e0f417046d3624803685fd4288907c7361c4468482ec4e051a4b20",
+      "evaluation_key": "fitness-evaluation-v1:b5967b509b5161d9b3daf98cb47841062a746c11faaedb99e1b610302f663f77",
+      "genes": [
+        0.2985158307979238,
+        0.9055700475205339,
+        0.2924910942867671,
+        0.16407998958701447,
+        0.17491874480938507,
+        0.32945547299723177
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:72a8f73ed92b762d54fd7dffe45edfc288a0e7a39d993f6e68bdfb1e2dba3692",
+      "evaluation_key": "fitness-evaluation-v1:c7e0918a32f990f2cc9618223b85e080136c8f6e2a6587d1cf3c1942f188a118",
+      "genes": [
+        0.25967933926705883,
+        0.9448837931977343,
+        0.2924818955354671,
+        0.13370111805642118,
+        0.3956235460284338,
+        0.3470099234946643
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:bdb10738226d2abc43acfd12b4da5e32190bb0bb326413c33e52b26c5212e080",
+      "evaluation_key": "fitness-evaluation-v1:d7e24b7e72ccc713670f6fe011a61efcc8f2b0127d3f48fbeb6b2bec98e7fa4f",
+      "genes": [
+        0.29604488108628707,
+        0.937134383202694,
+        0.29249865323199864,
+        0.12524514577684157,
+        0.288924571466591,
+        0.33198337724465043
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:3ce2e044b4533b196836050de2d8af41426fe028fd69c2d398d056d970c35e46",
+      "evaluation_key": "fitness-evaluation-v1:ea94cfad92d82c0c2ee24b3dd8f8ba13b492e2091cf0102d52c2ed6af5bbd502",
+      "genes": [
+        0.2985135001593638,
+        0.9063103565766532,
+        0.2923958265533168,
+        0.13346093955796615,
+        0.28366995828742614,
+        0.3100028164249984
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:47c2c1b70dfc5ab93cf453e5956458577ed90ba0bfd407eb56690a16962712a4",
+      "evaluation_key": "fitness-evaluation-v1:74c3488a4007cb6627e6ea2193b8d38794159c08b10c6fb200cc3f50bbf37e96",
+      "genes": [
+        0.29851571370564683,
+        0.9438904378154811,
+        0.3081567252763116,
+        0.13299796199091743,
+        0.2773612157721853,
+        0.37424614613810125
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:0e75019fc0e3dc3436fee9e4e8a4e0fec7fdf58eb784633b4290047906361ad4",
+      "evaluation_key": "fitness-evaluation-v1:968ebc1d81f2ff916cbef1c646a12a3fec44ea1e618951525f6b1f41d619fd6b",
+      "genes": [
+        0.2813692376233318,
+        0.9014978300798057,
+        0.29169891426200306,
+        0.14987436748340804,
+        0.35220729025669956,
+        0.34863042685442996
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:85df98667fb55796f8ca6831c5f429f88a212a41b65598c2c0c3e24c63ef8578",
+      "evaluation_key": "fitness-evaluation-v1:f5751c66bc8021760a0393fafdfee573285bb77bdb82e97d3f859a7ab515702c",
+      "genes": [
+        0.2813692376233318,
+        0.9014978300798057,
+        0.29169891426200306,
+        0.02321285093882336,
+        0.35220729025669956,
+        0.34673490611703434
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:bb73b9555c31632d588399050c3bc9edf700232bb965c835f0915d24c6ffbf56",
+      "evaluation_key": "fitness-evaluation-v1:2329f72d65e94e7282bf14669ce40529162b627d00fdd0b5b353391b502f2f59",
+      "genes": [
+        0.28107112035526427,
+        0.9104103434918733,
+        0.31833305595134737,
+        0.13371972778049568,
+        0.3299056364686514,
+        0.33894948365487537
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:b30d98a7a2df852a84e12ce3240bff77d4847a31355d8c5cc855595fa1c2a967",
+      "evaluation_key": "fitness-evaluation-v1:e74e8862476e1a3dc98629d70c4682820a8cc0519d17356f316ef7bc9465c81e",
+      "genes": [
+        0.29943952586543643,
+        0.9222840189090933,
+        0.4113117405629908,
+        0.12653337781891832,
+        0.2223450751516435,
+        0.331700756078894
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:d6e8a30c58b695cb2661e98191b0f1505ef34107b2a411df4028caad26ac8ad4",
+      "evaluation_key": "fitness-evaluation-v1:32bdf71e8871103c8860f6150b65299d1fe5b185a5b7e8488cbce663beb494bb",
+      "genes": [
+        0.2912816690602328,
+        0.9389286693577555,
+        0.29140350281353894,
+        0.13378188077513378,
+        0.3460292050429876,
+        0.2869606776366962
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:b2f4b6555757ab26c81c4ca3ef45be32052cb2a536cb0fc0eb953115c180bc23",
+      "evaluation_key": "fitness-evaluation-v1:db407633d3e256828f2793d2e53a147142841d072429d89f010ad2e26885c79b",
+      "genes": [
+        0.2985162785411377,
+        0.9502996377824279,
+        0.2913511289011396,
+        0.12627352980743123,
+        0.30483660772458304,
+        0.33190078047927674
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:e897086e9e0da52ae3744c9c6ddf5efe6e35c9f099454b78305c090b935f2f5f",
+      "evaluation_key": "fitness-evaluation-v1:d34c101b2ea3744c2f6a38f07e6ea5f2a40799432ae99a073ce2338f2db8d6e6",
+      "genes": [
+        0.2806460336666473,
+        0.9055164361052906,
+        0.42369815135729644,
+        0.2727058269131347,
+        0.3585750176423609,
+        0.24279958057198495
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:7087b7df255a20639836c5eea917f84eb5f65485cd704a1166f9cc49e2ed9baa",
+      "evaluation_key": "fitness-evaluation-v1:e3e71d65525d708a81767b387247f024d374f309252ab3fdc3e5a0d5bf584281",
+      "genes": [
+        0.2999396321862998,
+        0.893443460993096,
+        0.24677993831906053,
+        0.13395885024294985,
+        0.3460292050429876,
+        0.33480688258242497
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:e40093acab3fa33fd5ad4b5c091fbf58a46428de389b5770a123eb311027f74a",
+      "evaluation_key": "fitness-evaluation-v1:f59f99cd90ace9de09d956111819a0459cad7b2d89bbeb9e353f556fc68afb3b",
+      "genes": [
+        0.26932554506363593,
+        0.905573154107674,
+        0.29249795512784815,
+        0.15740817286912323,
+        0.3505308231025718,
+        0.29298991620701836
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:ec38af9311d3ee3d4ebcf23d3013e1d99def0f7da8b7e0dfc074d6972c1eeefc",
+      "evaluation_key": "fitness-evaluation-v1:e5b12cd06661b24e62be75d743f194cdab8eb690a121d77ba16b408c228d11b6",
+      "genes": [
+        0.29851571370564683,
+        0.905570004701347,
+        0.35818249235262256,
+        0.13380713588494497,
+        0.2752016337211577,
+        0.3388228021357414
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:e4472069978948fbcecc65ca14c122b9d2b08e6e44c009070bc24fda34e75785",
+      "evaluation_key": "fitness-evaluation-v1:736bbe7df9da3d0dee69bade43eb0cd52b3fbe3b069a5f6dcf090663f3034e64",
+      "genes": [
+        0.29851618475611913,
+        0.947213143026121,
+        0.2913836088341024,
+        0.12627352980743123,
+        0.34804576168206464,
+        0.3318118427207493
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:2edfca65cefb79e451797dcc72c0a9ecb3c789a1f21b0cbef1ff043dbc7bd8e3",
+      "evaluation_key": "fitness-evaluation-v1:05b7b4902f38cb2a6135558b09c76ed9e44d2082acd3b72b4b43298641e478af",
+      "genes": [
+        0.2984993848411643,
+        0.9088320000916513,
+        0.29251202216798844,
+        0.13394418442586617,
+        0.3098444270485821,
+        0.3342658730980052
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:d27aa3e78387714bfe2bd86917c326d85394140ed7a38a7fb2baba5289af74f7",
+      "evaluation_key": "fitness-evaluation-v1:499deca15c1197ddbc375671034e5e45fbe8759975406478bfc9d02f9d519b51",
+      "genes": [
+        0.26900417560913753,
+        0.9577596337309338,
+        0.29249795512784815,
+        0.13379190057326237,
+        0.28019061702889003,
+        0.31422468128640163
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:6472d3dc715e8eeb0078aec8a5c2675f589fb60e1ebded3c25a07701998b3c6c",
+      "evaluation_key": "fitness-evaluation-v1:6a345773fad6934538e8d53f780a6e5db97c6fd14aa443c91f44e8066c309785",
+      "genes": [
+        0.2988370831601452,
+        0.9055639490145987,
+        0.2887008159681267,
+        0.13380734414984366,
+        0.2997287857561214,
+        0.33862202208196457
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:6374f6520c53e6ce876cee69796b915d75e7792b20d4b2bd35909ae89b8f37c9",
+      "evaluation_key": "fitness-evaluation-v1:af1717bfb1206f21fa3983aa7be3ec563a9cf9ac1f70ca5d04f9086aa38bb65b",
+      "genes": [
+        0.2985160423460649,
+        0.9578016867097738,
+        0.2924920360839858,
+        0.13394418442586617,
+        0.3502583315342018,
+        0.2965452369618874
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:3294ee96bdc487903925d55c50625c4b40b622456ea22d045fa30b18042f9b5a",
+      "evaluation_key": "fitness-evaluation-v1:5997ca3172284a55e482331c9d15e319d14d2926cbd5519b3547f1e06a6edc8b",
+      "genes": [
+        0.2817072439064636,
+        0.9032657701481299,
+        0.2707939857805087,
+        0.124558348829135,
+        0.1971874530067233,
+        0.41434639976026755
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:4402971e029b934edef0f479bb0d7e1328174c988c53c3e0e1ed274d4528ef35",
+      "evaluation_key": "fitness-evaluation-v1:ebdaa1599c19bb357bad3e927a37186bd16d1abe626287ad6cb0c360f9bdf77a",
+      "genes": [
+        0.2891621009246284,
+        0.9031772422046703,
+        0.29252574978674106,
+        0.1767668713726768,
+        0.28802960668814215,
+        0.3317079661608189
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:2064d476f65ab8b6fa5eac38474694e7f3d765a86520518a6584f87b5be94bee",
+      "evaluation_key": "fitness-evaluation-v1:e9cd86ec891f3624e45c8dfe3f70e79704ed890b63e3b9a6a709e94ba5d0921d",
+      "genes": [
+        0.29790986331917374,
+        0.9226726459824922,
+        0.29138578542362653,
+        0.11095005624982643,
+        0.3420941960398001,
+        0.2802642546471655
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:539cf8d961edfa9d5fafc32b0b7121d2fda5cd7dc92b3561eac300f404bd4d5b",
+      "evaluation_key": "fitness-evaluation-v1:fa2630bcb2756d30fdc582c83488c1d058a164538056a6fd8a7b254b46824550",
+      "genes": [
+        0.1616894706722079,
+        0.9227243009847692,
+        0.22030592091452905,
+        0.13378188077513378,
+        0.16426577296888079,
+        0.28466336629009603
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:0e1c61c4e51739e9138942b8bbae4ab23d4f7c53787af950ddfb7f7ae6af6748",
+      "evaluation_key": "fitness-evaluation-v1:58d420b40a71554c81052da33cb3becf6e94405efe250a02283983b1566255ca",
+      "genes": [
+        0.29849952725121853,
+        0.90528479801366,
+        0.2924506447201371,
+        0.13375696998188225,
+        0.3462499357765341,
+        0.338607463392029
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:0daf433764d80fdadb9d69d85fb78aa156772368daa7c84d7059b38282bf7405",
+      "evaluation_key": "fitness-evaluation-v1:bcbab6fd7f6b11ac4a4b3ac507986e6b255c1045831fba9e3915efcbe33f3eb7",
+      "genes": [
+        0.2985160431152221,
+        0.9507603451006418,
+        0.29145090532581613,
+        0.12632390397539262,
+        0.3046158769910365,
+        0.33421265051581245
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:e7ce5120f8dae32d7d69c4a8211d4f30aaa4f639bc37f8e32d1c84aa17e88d11",
+      "evaluation_key": "fitness-evaluation-v1:8426f08033a8815c10cceb73c27a184a822a8326850739962ba76875d8fdcda9",
+      "genes": [
+        0.23852841253259988,
+        0.9227598881335967,
+        0.29252273870176215,
+        0.19778802533608528,
+        0.43705059107159155,
+        0.2892802909355138
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:4f22732914d11c9a810ccedc35e97683122cd7478ee50509ea1a764ca873e77c",
+      "evaluation_key": "fitness-evaluation-v1:53458cda94c38f113cd2299f34f83af9d534f86cd62a196d68d46d66d428530b",
+      "genes": [
+        0.2996937219642016,
+        0.9295996985065343,
+        0.29337506414510195,
+        0.2724694174900404,
+        0.16850356120048315,
+        0.3311442569815006
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:e7b65ea395404e7f733a670a9eb119a178473e16698c9f3b5390bf0d59f29c9b",
+      "evaluation_key": "fitness-evaluation-v1:22e04a441f878ecbd2911848ef52dcd329ecb6983c847114bb05bae99d7c83ec",
+      "genes": [
+        0.29790806057018754,
+        0.9226808917126192,
+        0.3075242125392901,
+        0.1445721207642617,
+        0.34895615635111404,
+        0.33133687875662143
+      ]
+    },
+    {
+      "chromosome_cache_key": "plant-thermostat-chromosome-v1:7d211eae611c62b23028591dbfec81b5b7dae1b31bf8d1c77b286be1b39d7b1d",
+      "evaluation_key": "fitness-evaluation-v1:dee55e16a545533dac697b12d141715e899c2eba74d83d6fa64b341de22e42a4",
+      "genes": [
+        0.2992779338606993,
+        0.921277561167672,
+        0.29183959332716913,
+        0.12891068104222056,
+        0.47532062752414195,
+        0.22854304413305326
+      ]
+    }
+  ],
+  "rng_state": {
+    "bit_generator": "PCG64",
+    "has_uint32": 1,
+    "state": {
+      "inc": 181194528911776974576733935579777284723,
+      "state": 56002389997060403763140328455039899117
+    },
+    "uinteger": 3135795623
+  },
+  "schema_version": 1,
+  "stagnation_state": {
+    "exact_best_objective": 54927.87406455872,
+    "material_best_objective": 54927.87406455872,
+    "stagnant_generation_count": 1
+  }
+}
