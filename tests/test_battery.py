@@ -15,7 +15,7 @@ import math
 import numpy as np
 import pytest
 
-from src.models.battery import SOC_EPS, BatteryPack
+from src.models.battery import SOC_EPS, BatteryMode, BatteryPack
 
 CAPACITY_KWH = 10.0
 SOC_MID = 0.5
@@ -30,6 +30,20 @@ SMALL_PACK_KWH = 5.0
 @pytest.fixture
 def pack() -> BatteryPack:
     return BatteryPack(capacity_kwh=CAPACITY_KWH)
+
+
+@pytest.fixture
+def physical_pack() -> BatteryPack:
+    q_nominal_ah = CAPACITY_KWH * 1000.0 / 350.0
+    return BatteryPack(
+        capacity_kwh=CAPACITY_KWH,
+        mode=BatteryMode.PHYSICAL,
+        i_charge_max_a=q_nominal_ah,
+        i_discharge_max_a=3.0 * q_nominal_ah,
+        terminal_voltage_min_v=242.5,
+        terminal_voltage_max_v=407.4,
+        q_nominal_ah=q_nominal_ah,
+    )
 
 
 def _naive_current_a(pack: BatteryPack, power_kw: float, soc: float) -> float:
@@ -84,6 +98,17 @@ def test_charge_capacity_recovers_rated_energy_at_nominal_voltage(pack):
 
 def test_nominal_voltage_is_the_midpoint_of_the_linear_ocv(pack):
     assert pack.nominal_voltage_v == pytest.approx(float(pack.open_circuit_voltage(0.5)))
+
+
+def test_stored_energy_is_the_integral_of_the_linear_ocv(pack):
+    soc = 0.6
+    expected_kwh = (
+        pack.charge_capacity_ah
+        * (pack.v_min_v * soc + 0.5 * (pack.v_max_v - pack.v_min_v) * soc**2)
+        / 1000.0
+    )
+    assert pack.stored_energy_kwh(soc) == pytest.approx(expected_kwh, rel=1.0e-13)
+    assert pack.stored_energy_kwh(1.0) == pytest.approx(pack.capacity_kwh)
 
 
 def test_full_discharge_at_negligible_power_delivers_the_rated_energy():
@@ -800,3 +825,118 @@ def test_pack_power_limit_derives_from_capacity_not_engine_rating():
     state = small.step(SOC_MID, PREVIOUS_MODEL_ENGINE_KW, DT_S)
     assert state.power_limited
     assert state.power_kw == pytest.approx(15.0)
+
+
+# ---------------------------------------------------------------------------
+# Selectable physical limits and midpoint integration
+# ---------------------------------------------------------------------------
+
+
+def test_legacy_mode_is_the_explicit_unchanged_default(pack):
+    assert pack.battery_mode is BatteryMode.LEGACY
+    assert pack.available_charge_kw(SOC_MID) == pytest.approx(10.0)
+    assert pack.available_discharge_kw(SOC_MID) == pytest.approx(30.0)
+
+
+def test_physical_mode_requires_every_uncalibrated_parameter_explicitly():
+    with pytest.raises(ValueError, match="physical mode requires explicit parameters"):
+        BatteryPack(CAPACITY_KWH, mode="physical")
+    with pytest.raises(ValueError, match="require mode='physical'"):
+        BatteryPack(CAPACITY_KWH, i_charge_max_a=30.0)
+
+
+def test_physical_current_limits_replace_the_constant_power_proxy(physical_pack):
+    charge = physical_pack.charge_availability(SOC_MID)
+    discharge = physical_pack.discharge_availability(SOC_MID)
+    assert charge.binding_limit == "current"
+    assert discharge.binding_limit == "current"
+    assert charge.current_a == pytest.approx(physical_pack.i_charge_max_a)
+    assert discharge.current_a == pytest.approx(physical_pack.i_discharge_max_a)
+    assert charge.power_kw == pytest.approx(10.040816326530612)
+    assert discharge.power_kw == pytest.approx(29.63265306122449)
+
+
+@pytest.mark.parametrize(
+    ("power_kw", "terminal_limit_v", "charging"),
+    [(-50.0, 352.0, True), (50.0, 348.0, False)],
+)
+def test_physical_terminal_voltage_limits_hold_for_the_complete_step(
+    power_kw, terminal_limit_v, charging
+):
+    q_nominal_ah = CAPACITY_KWH * 1000.0 / 350.0
+    pack = BatteryPack(
+        CAPACITY_KWH,
+        mode="physical",
+        i_charge_max_a=10.0 * q_nominal_ah,
+        i_discharge_max_a=10.0 * q_nominal_ah,
+        terminal_voltage_min_v=terminal_limit_v if not charging else 200.0,
+        terminal_voltage_max_v=terminal_limit_v if charging else 500.0,
+        q_nominal_ah=q_nominal_ah,
+    )
+    state = pack.step(SOC_MID, power_kw, DT_S)
+    assert state.voltage_limited and state.rate_limited
+    assert state.active_limit == "voltage"
+    assert state.constraint_terminal_voltage_v == pytest.approx(terminal_limit_v)
+    if charging:
+        assert state.current_a < 0.0
+        assert state.constraint_terminal_voltage_v <= terminal_limit_v + 1.0e-12
+    else:
+        assert state.current_a > 0.0
+        assert state.constraint_terminal_voltage_v >= terminal_limit_v - 1.0e-12
+
+
+def test_physical_current_limit_is_exposed_on_the_returned_state(physical_pack):
+    charge = physical_pack.step(SOC_MID, -50.0, DT_S)
+    discharge = physical_pack.step(SOC_MID, 50.0, DT_S)
+    assert charge.current_limited and charge.active_limit == "current"
+    assert discharge.current_limited and discharge.active_limit == "current"
+    assert charge.current_a == pytest.approx(-physical_pack.i_charge_max_a)
+    assert discharge.current_a == pytest.approx(physical_pack.i_discharge_max_a)
+
+
+def test_midpoint_ocv_makes_endpoint_and_internal_energy_identical(physical_pack):
+    for power_kw in (-50.0, 50.0):
+        state = physical_pack.step(SOC_MID, power_kw, DT_S)
+        endpoint_kwh = float(physical_pack.stored_energy_kwh(state.soc)) - float(
+            physical_pack.stored_energy_kwh(SOC_MID)
+        )
+        integrated_kwh = (
+            -state.open_circuit_voltage_v * state.current_a * DT_S / 3_600_000.0
+        )
+        assert endpoint_kwh == pytest.approx(integrated_kwh, abs=1.0e-14)
+        assert state.power_kw == pytest.approx(
+            state.terminal_voltage_v * state.current_a / 1000.0,
+            abs=1.0e-13,
+        )
+
+
+def test_physical_energy_residual_is_roundoff_limited_at_every_timestep(
+    physical_pack,
+):
+    residuals = []
+    for dt_s in (120.0, 60.0, 30.0, 15.0):
+        bus_kwh, loss_kwh, final_soc = _discharge_to_cutoff(
+            physical_pack, 5.0, dt_s
+        )
+        expected_kwh = _open_circuit_energy_kwh(
+            physical_pack, 1.0, final_soc
+        )
+        residuals.append(bus_kwh + loss_kwh - expected_kwh)
+    assert all(abs(residual) < 1.5e-14 for residual in residuals)
+
+
+def test_legacy_residual_series_retains_its_first_order_magnitude(pack):
+    residuals = []
+    for dt_s in (120.0, 60.0, 30.0, 15.0):
+        bus_kwh, loss_kwh, final_soc = _discharge_to_cutoff(pack, 5.0, dt_s)
+        expected_kwh = _open_circuit_energy_kwh(pack, 1.0, final_soc)
+        residuals.append(bus_kwh + loss_kwh - expected_kwh)
+    assert residuals == pytest.approx(
+        (
+            0.022460850203325222,
+            0.011281321472255357,
+            0.005650474632529878,
+            0.0028274929859097853,
+        ),
+        rel=1.0e-11,
+    )

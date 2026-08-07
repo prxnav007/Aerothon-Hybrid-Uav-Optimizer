@@ -1,0 +1,53 @@
+{
+  "reproduction_command": "PYTHONDONTWRITEBYTECODE=1 env/bin/pytest -q -s tests/test_baseline_regression.py",
+  "captured_before_milestone_test_count": 812,
+  "design": {
+    "wing_area_m2": 7.59175537062125,
+    "engine_power_sl_kw": 86.7791369750147,
+    "initial_fuel_kg": 288.6101983109414
+  },
+  "configuration": {
+    "controller": {
+      "class": "PIECMS",
+      "kp": 5.0,
+      "soc_ref": 0.6,
+      "s0": null,
+      "s0_ratio": 1.0,
+      "has_integral_action": false
+    },
+    "engine": {
+      "allow_shutdown": true,
+      "idle_fuel_fraction": 0.2,
+      "min_power_fraction": 0.15,
+      "restart_fuel_kg": 0.0
+    },
+    "transition_model": {
+      "minimum_on_time_s": null,
+      "minimum_off_time_s": null,
+      "start_transient_modelled": false
+    },
+    "simulation": {
+      "timestep_s": 60.0
+    }
+  },
+  "loiter_discharge_crossing": {
+    "start_mass_kg": 954.7917908626673,
+    "first_feasible_logged_mass_kg": 884.6968168303832,
+    "fuel_burned_to_first_feasible_step_kg": 70.09497403228409,
+    "elapsed_to_first_feasible_step_h": 3.433333333333333,
+    "loiter_duration_h": 13.845237463968354,
+    "feasible_duration_h": 10.428570797301688,
+    "logged_loiter_time_power_feasible_fraction": 0.7532244083528075,
+    "engine_off_fraction": 0.21908857404775145,
+    "engine_off_fraction_after_crossing": 0.2897324666859644
+  },
+  "headline": {
+    "endurance_s": 56182.85487028608,
+    "endurance_h": 15.606348575079465,
+    "fuel_used_kg": 283.1672755275879,
+    "final_soc": 0.102409321672869,
+    "min_soc": 0.050005272475816,
+    "restart_count": 180,
+    "termination_reason": "fuel_reserve"
+  }
+}

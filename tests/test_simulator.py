@@ -13,7 +13,7 @@ from src.control.fixed_ecms import FixedECMS
 from src.control.pi_ecms import PIECMS
 from src.control.power_split import SplitDecision
 from src.models.battery import BatteryPack
-from src.models.engine import LHV_KJ_KG, Turboshaft
+from src.models.engine import Turboshaft
 from src.models.mass import MassBreakdown
 from src.models.powertrain import SeriesPowertrain
 from src.simulation.mission import ps1_mission
@@ -22,6 +22,7 @@ from src.simulation.simulator import (
     MissionResult,
     TimeStep,
     log_to_dataframe,
+    mission_energy_balance,
     run_mission,
 )
 
@@ -118,25 +119,59 @@ def test_energy_balance_closes_with_all_accounted_losses(
     battery_preferring_result: MissionResult,
 ) -> None:
     assert battery_preferring_result.log is not None
-    supplied_kj = 0.0
-    consumed_kj = 0.0
-    for step in battery_preferring_result.log:
-        supplied_kj += (
-            (step.fuel_flow_kg_s * step.dt_s + step.restart_fuel_kg)
-            * LHV_KJ_KG
-            + step.battery_internal_kw * step.dt_s
+    balance = mission_energy_balance(battery_preferring_result)
+    print(f"endpoint_energy_balance_residual_fraction={balance.residual_fraction:.12e}")
+    print(
+        "discrete_energy_balance_residual_fraction="
+        f"{balance.discrete_residual_fraction:.12e}"
+    )
+    assert balance.fuel_chemical_in_kwh > 0.0
+    assert balance.battery_ohmic_loss_kwh > 0.0
+    assert balance.battery_stored_energy_change_kwh < 0.0
+    assert balance.residual_fraction == pytest.approx(0.001404986785693786)
+    assert balance.residual_kwh == pytest.approx(
+        -balance.battery_integration_residual_kwh, abs=1.0e-12
+    )
+    assert balance.discrete_residual_fraction < 1.0e-12
+
+
+def test_endpoint_energy_residual_halves_with_the_explicit_euler_timestep(
+    reference_aircraft: Aircraft,
+    reference_mission,
+) -> None:
+    residuals = []
+    for step_s in (60.0, 30.0, 15.0):
+        result = run_mission(
+            reference_aircraft,
+            reference_mission,
+            FixedECMS.battery_first(),
+            dt_s=step_s,
+            record_log=True,
         )
-        consumed_kj += (
-            step.thrust_power_kw
-            + step.engine_thermal_loss_kw
-            + step.source_losses_kw
-            + step.demand_losses_kw
-            + step.propeller_losses_kw
-            + step.battery_ohmic_loss_kw
-        ) * step.dt_s
-    residual_fraction = abs(supplied_kj - consumed_kj) / supplied_kj
-    print(f"energy_balance_residual_fraction={residual_fraction:.12e}")
-    assert residual_fraction < 1.0e-12
+        residuals.append(mission_energy_balance(result).residual_fraction)
+    assert residuals == pytest.approx(
+        (
+            0.001404986785693786,
+            0.0007022433338113694,
+            0.0003533144534039296,
+        )
+    )
+    assert residuals[1] / residuals[0] == pytest.approx(0.5, rel=0.01)
+    assert residuals[2] / residuals[1] == pytest.approx(0.5, rel=0.01)
+
+
+def test_energy_accounting_requires_an_instrumented_mission(
+    reference_aircraft: Aircraft,
+    reference_mission,
+) -> None:
+    result = run_mission(
+        reference_aircraft,
+        reference_mission,
+        FixedECMS.pure_thermal(),
+        record_log=False,
+    )
+    with pytest.raises(ValueError, match="record_log=True"):
+        mission_energy_balance(result)
 
 
 def test_every_phase_reaches_its_target_and_order_is_preserved(

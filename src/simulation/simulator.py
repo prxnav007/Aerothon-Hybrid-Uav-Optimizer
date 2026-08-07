@@ -38,9 +38,11 @@ if TYPE_CHECKING:
 
 __all__ = [
     "Aircraft",
+    "MissionEnergyBalance",
     "MissionResult",
     "TimeStep",
     "log_to_dataframe",
+    "mission_energy_balance",
     "run_mission",
 ]
 
@@ -116,6 +118,7 @@ class TimeStep:
     bus_from_engine_kw: float
     battery_internal_kw: float
     battery_ohmic_loss_kw: float
+    battery_stored_energy_change_kwh: float
     thrust_power_kw: float
     engine_thermal_loss_kw: float
     source_losses_kw: float
@@ -140,6 +143,25 @@ class MissionResult:
     mean_system_efficiency: float
     failure_flags: tuple[str, ...]
     log: tuple[TimeStep, ...] | None
+
+
+@dataclass(frozen=True)
+class MissionEnergyBalance:
+    """Integrated fuel-to-thrust energy ledger for a recorded mission [kWh]."""
+
+    fuel_chemical_in_kwh: float
+    propulsive_work_out_kwh: float
+    engine_thermal_loss_kwh: float
+    source_chain_loss_kwh: float
+    demand_chain_loss_kwh: float
+    propeller_loss_kwh: float
+    battery_ohmic_loss_kwh: float
+    battery_stored_energy_change_kwh: float
+    discrete_battery_stored_energy_change_kwh: float
+    battery_integration_residual_kwh: float
+    residual_kwh: float
+    residual_fraction: float
+    discrete_residual_fraction: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -575,8 +597,9 @@ def run_mission(
                 all_phases_completed = False
                 break
 
+            pre_step_soc = soc
             battery_state = aircraft.battery.step(
-                soc, dispatch.split.battery_bus_kw, step_dt_s
+                pre_step_soc, dispatch.split.battery_bus_kw, step_dt_s
             )
             if abs(battery_state.power_kw - dispatch.split.battery_bus_kw) > _POWER_TOLERANCE_KW:
                 if battery_state.rate_limited:
@@ -655,6 +678,10 @@ def run_mission(
                 battery_internal_kw = (
                     battery_state.open_circuit_voltage_v * battery_state.current_a / 1000.0
                 )
+                battery_stored_energy_change_kwh = (
+                    float(aircraft.battery.stored_energy_kwh(battery_state.soc))
+                    - float(aircraft.battery.stored_energy_kwh(pre_step_soc))
+                )
                 engine_thermal_loss_kw = fuel_chemical_kw - engine_state.delivered_kw
                 source_losses_kw = engine_state.delivered_kw - bus_from_engine_kw
                 demand_losses_kw = dispatch.bus_demand_kw - dispatch.shaft_power_kw
@@ -699,6 +726,9 @@ def run_mission(
                         bus_from_engine_kw=bus_from_engine_kw,
                         battery_internal_kw=battery_internal_kw,
                         battery_ohmic_loss_kw=battery_state.ohmic_loss_kw,
+                        battery_stored_energy_change_kwh=(
+                            battery_stored_energy_change_kwh
+                        ),
                         thrust_power_kw=propulsive_kw,
                         engine_thermal_loss_kw=engine_thermal_loss_kw,
                         source_losses_kw=source_losses_kw,
@@ -744,6 +774,83 @@ def run_mission(
         mean_system_efficiency=mean_efficiency,
         failure_flags=tuple(flags),
         log=None if log_entries is None else tuple(log_entries),
+    )
+
+
+def mission_energy_balance(result: MissionResult) -> MissionEnergyBalance:
+    """Integrate the per-step energy ledger for a recorded mission.
+
+    The primary residual uses endpoint energy from the integrated SoC and the
+    linear OCV curve.  The discrete residual separately uses
+    ``delta_E_stored = -V_oc,start*I*dt`` and therefore isolates conversion
+    accounting from the explicit-Euler OCV integration bias.
+    """
+    if result.log is None:
+        raise ValueError("mission_energy_balance requires run_mission(record_log=True)")
+
+    fuel_chemical_kwh = sum(
+        (step.fuel_flow_kg_s * step.dt_s + step.restart_fuel_kg)
+        * LHV_KJ_KG
+        / 3600.0
+        for step in result.log
+    )
+    propulsive_kwh = sum(
+        step.thrust_power_kw * step.dt_s / 3600.0 for step in result.log
+    )
+    engine_thermal_kwh = sum(
+        step.engine_thermal_loss_kw * step.dt_s / 3600.0
+        for step in result.log
+    )
+    source_loss_kwh = sum(
+        step.source_losses_kw * step.dt_s / 3600.0 for step in result.log
+    )
+    demand_loss_kwh = sum(
+        step.demand_losses_kw * step.dt_s / 3600.0 for step in result.log
+    )
+    propeller_loss_kwh = sum(
+        step.propeller_losses_kw * step.dt_s / 3600.0 for step in result.log
+    )
+    battery_loss_kwh = sum(
+        step.battery_ohmic_loss_kw * step.dt_s / 3600.0
+        for step in result.log
+    )
+    stored_change_kwh = sum(
+        step.battery_stored_energy_change_kwh for step in result.log
+    )
+    discrete_stored_change_kwh = -sum(
+        step.battery_internal_kw * step.dt_s / 3600.0 for step in result.log
+    )
+    accounted_kwh = (
+        propulsive_kwh
+        + engine_thermal_kwh
+        + source_loss_kwh
+        + demand_loss_kwh
+        + propeller_loss_kwh
+        + battery_loss_kwh
+        + stored_change_kwh
+    )
+    residual_kwh = fuel_chemical_kwh - accounted_kwh
+    discrete_accounted_kwh = (
+        accounted_kwh - stored_change_kwh + discrete_stored_change_kwh
+    )
+    discrete_residual_kwh = fuel_chemical_kwh - discrete_accounted_kwh
+    scale_kwh = max(abs(fuel_chemical_kwh), 1.0e-30)
+    return MissionEnergyBalance(
+        fuel_chemical_in_kwh=fuel_chemical_kwh,
+        propulsive_work_out_kwh=propulsive_kwh,
+        engine_thermal_loss_kwh=engine_thermal_kwh,
+        source_chain_loss_kwh=source_loss_kwh,
+        demand_chain_loss_kwh=demand_loss_kwh,
+        propeller_loss_kwh=propeller_loss_kwh,
+        battery_ohmic_loss_kwh=battery_loss_kwh,
+        battery_stored_energy_change_kwh=stored_change_kwh,
+        discrete_battery_stored_energy_change_kwh=discrete_stored_change_kwh,
+        battery_integration_residual_kwh=(
+            stored_change_kwh - discrete_stored_change_kwh
+        ),
+        residual_kwh=residual_kwh,
+        residual_fraction=abs(residual_kwh) / scale_kwh,
+        discrete_residual_fraction=abs(discrete_residual_kwh) / scale_kwh,
     )
 
 

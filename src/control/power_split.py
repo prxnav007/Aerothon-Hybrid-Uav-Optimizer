@@ -155,8 +155,9 @@ def _fuel_flow_kg_s(problem: _Problem, engine_shaft_kw: float) -> float:
 
 
 def _battery_internal_kw(problem: _Problem, battery_bus_kw: float) -> float:
-    current_a = float(problem.battery.current_from_power(battery_bus_kw, problem.soc))
-    return problem.battery_ocv_v * current_a / _WATTS_PER_KW
+    return problem.battery.internal_power_kw(
+        battery_bus_kw, problem.soc, problem.dt_s
+    )
 
 
 def _objective(problem: _Problem, engine_shaft_kw: float) -> float:
