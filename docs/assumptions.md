@@ -659,6 +659,24 @@ starting point, not a tuned claim; Part E sweeps it from 0 to 20 together with t
 **Bias:** Unknown. Larger gain retains more charge at low SoC but can increase engine cycling and
 part-load operation; the direction depends on the mission and restart model.
 
+### C-06 — Experimental fuzzy-ECMS inference and defaults
+**Value:** `soc_low = 0.30`, `soc_high = 0.70`, `s_min_ratio = 0.75`, and
+`s_max_ratio = 1.25`, with the consequent ratios applied to `switching_s`. `UNVERIFIED` (tuning),
+`VERIFIED` (complete rule coverage and monotonic SoC response)
+**Rationale:** The controller is an opt-in benchmark for O-08, not the active mission strategy and
+not an innovation claim. A zero-order Sugeno system uses complete low/medium/high piecewise-linear
+partitions for SoC and normalized bus demand. Low SoC selects the high ratio at every demand and
+high SoC selects the low ratio. At medium SoC the ratio falls from `(1 + s_max_ratio)/2` through
+`1.0` to `(s_min_ratio + 1)/2` as demand rises, allowing peak assistance only when charge is
+available. All nine rules are defined, and invalid thresholds are rejected rather than sorted or
+clipped.
+**Implementation:** Consequents are derived from the configured ratio bounds rather than anchored
+to fixed universe edges, so changing either bound moves the saturated output directly. Product
+rule activation and weighted-average defuzzification make inference deterministic and stateless.
+The module is not imported by the simulator, mission factory, or optimization skeleton; it runs
+only when a caller explicitly injects `FuzzyECMS` through the existing controller interface.
+**Bias:** Unknown. These values are reproducible test defaults, not calibrated controller gains.
+
 ### S-01 — Fill-to-MTOW fuel policy
 **Value:** Fuel loaded = MTOW − dry mass. `VERIFIED`
 **Rationale:** Makes the powertrain-versus-fuel trade explicit and direct. Every kilogram spent on
@@ -871,6 +889,7 @@ actual editions before citation in the technical report.
 
 | Date | Change |
 |---|---|
+| 2026-08-07 | **Opt-in `control/fuzzy_ecms.py` benchmark.** Added C-06 for a complete 3×3 zero-order Sugeno controller using SoC and normalized bus demand, with consequent bounds expressed as ratios around the marginal `switching_s` reference. The controller remains absent from mission defaults and the optimization skeleton, so O-08 stays open. Added contract, rule-coverage, gene-responsiveness, validation and power-split boundary tests. |
 | 2026-08-05 | **Marginal controller anchor, reserve semantics, and sizing interpretations.** Added `switching_s` to the controller context and made it the fixed-ratio and PI-ratio anchor; `neutral_s` remains an average-cost diagnostic. Resolved O-04 to engine shutdown by default while retaining idle sensitivity, and added simulator accounting for off-to-on restart fuel. Split S-04 into 4.7 kg for measured descent/landing consumption and a separate 5.0 kg post-landing reserve, with explicit reserve-shortfall reporting. Opened O-12 and recorded both constraint results: 133.270 kW with a required 10 km ceiling versus 86.779 kW when the stated altitude is treated as a selectable cruise band. |
 | — | Initial version. Fixed-mass group revised from 450 kg lumped to 250 kg itemized (M-02) following explicit modelling of wing and electrical chain masses. Engine specific power revised from 1.5 to 3.5 kW/kg (M-04). Constant SFC replaced by Willans line (E-01). |
 | 2026-08-04 | **`mass.py` build.** M-03: N_z corrected from limit to ultimate load factor — the entry previously listed a single row `N_z = 3.8`, which fed the regression the limit value and under-predicted wing mass by 22%; equation form and units promoted to `VERIFIED`, parameter values remain `UNVERIFIED`. M-06: the claim that the fuel volume check penalizes high aspect ratio corrected — wing *area* is the sensitive variable (binds below S ≈ 7 m²), the aspect-ratio crossover at AR ≈ 46 is physically irrelevant; usable-volume fraction downgraded to `PLACEHOLDER`. O-09 (limit load factor) and O-10 (tank volume fraction) opened. |

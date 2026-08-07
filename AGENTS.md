@@ -39,23 +39,24 @@ way — it is what lets each model be tested standalone and what keeps the GA fr
 aspect ratio and altitude design variables without touching a physics file. None of them import
 `src/config.py` either.
 
-## 3. Build status — as of 2026-08-05
+## 3. Build status — as of 2026-08-07
 
 **Verify this against the filesystem before trusting it; it is the first section to go stale.**
 
 | Area | State |
 |---|---|
 | `models/atmosphere.py`, `aerodynamics.py`, `mass.py`, `engine.py`, `battery.py`, `powertrain.py` | complete, with test modules |
-| `control/base.py`, `control/power_split.py`, `control/fixed_ecms.py`, `simulation/mission.py`, `simulation/simulator.py`, and their test modules | complete; controller contract and fixed control group, ECMS split, mission profile and time-marching integration |
+| `control/base.py`, `control/power_split.py`, `control/fixed_ecms.py`, `control/pi_ecms.py`, `control/fuzzy_ecms.py`, `simulation/mission.py`, `simulation/simulator.py`, and their test modules | complete; controller contract, fixed/PI/opt-in fuzzy control groups, ECMS split, mission profile and time-marching integration |
 | `analysis/constraint_diagram.py` | complete, with formulation, hybrid, sizing, sensitivity and plotting tests |
 | `tests/test_controllers.py` | **empty file** |
-| `control/pi_ecms.py`, `control/fuzzy_ecms.py`, `simulation/feasibility.py`, `optimization/`, remaining `analysis/`, `dashboard/`, `src/config.py` | **empty files** — directory skeleton only |
+| `simulation/feasibility.py`, `optimization/`, remaining `analysis/`, `dashboard/`, `src/config.py` | **empty files** — directory skeleton only |
 | `configs/*.yaml`, `run.sh`, `README.md` | **empty files** |
 | `notebooks/*.ipynb` | placeholder JSON |
 
-Verification: the workspace's `env/` Python 3.14 environment contains pytest and the pinned pandas
-and Matplotlib dependencies. On 2026-08-05, `PYTHONDONTWRITEBYTECODE=1 env/bin/pytest -q`
-completed with **744 passed** in 22.32 s.
+Verification: on 2026-08-07, the bundled Python 3.12 runtime with pytest and the pinned NumPy,
+pandas and Matplotlib packages completed `pytest tests -q -p no:cacheprovider` with **843 passed**
+in 24.39 s. Test collection is restricted to `tests/` because the temporary ignored `env/`
+dependency directory contains vendor test packages that are not part of this project.
 
 ## 4. Non-negotiable conventions
 

@@ -1,89 +1,37 @@
-"""International Standard Atmosphere (ISA / ICAO Standard Atmosphere), 0-20 km.
-
-This is the lowest layer of the physics stack for the hybrid-electric UAV mission
-simulator: it maps altitude to atmospheric state. Aerodynamics (dynamic pressure,
-Reynolds number), the engine model (power lapse via density ratio) and the Mach
-validity check all consume its output, so it is kept pure, dependency-free and
-independently testable.
-
-Standard implemented
---------------------
-ISO 2533:1975 / ICAO Doc 7488 Standard Atmosphere, geopotential altitudes
-0 m to 20 000 m. That covers two layers:
-
-  * Layer 1, troposphere        0 m <= h < 11 000 m, linear lapse   (-6.5 K/km)
-  * Layer 2, lower stratosphere 11 000 m <= h <= 20 000 m, isothermal (216.65 K)
-
-Non-standard days (ISA+15 etc.), humidity, wind and layers above 20 km are out of
-scope. See "Extending to further layers" below.
-
-Altitude convention
--------------------
-ISA is *defined* on GEOPOTENTIAL altitude `h`, which absorbs the variation of
-gravity with height so that the hydrostatic equation can be integrated with a
-constant `g0`. Every function in this module whose parameter is named `h_m`
-takes GEOPOTENTIAL metres. Flight instruments, terrain and the mission simulator
-generally work in GEOMETRIC altitude `z`; convert with
-:func:`geometric_to_geopotential` first. The difference is ~0.16 % at 10 km
-(10 000 m geometric = 9 984.3 m geopotential), which is small but not negligible
-at the precision this module otherwise delivers.
-
-Sources consulted and verified against (August 2026)
-----------------------------------------------------
-1. ISO 2533:1975 *Standard Atmosphere* - defining constants table (g_n, R*, M, R,
-   T0, p0, rho0, beta, r, kappa, Sutherland beta_s and S). The ISO sample PDF is
-   distributed as scanned images and could not be machine-read, so its constants
-   were taken via the references below rather than read directly.
-   https://www.iso.org/standard/7472.html
-2. Atmospheris, "ISO 2533 Standard Atmosphere" - constants table and the
-   troposphere/stratosphere equations. https://www.atmospheris.org/iso-2533
-3. Public Domain Aeronautical Software (PDAS), standard atmosphere table (SI) -
-   used as an INDEPENDENT numerical cross-check of pressure, density, speed of
-   sound and dynamic viscosity. https://www.pdas.com/atmosTable1SI.html
-4. Wikipedia, "International Standard Atmosphere" - layer table cross-check.
-   https://en.wikipedia.org/wiki/International_Standard_Atmosphere
-
-Where sources disagreed
------------------------
-* **Sutherland coefficient.** Ref. 2 lists beta_s = 1.468e-6 kg/(m*s*K^0.5).
-  Every other source, including ISO 2533 itself, gives **1.458e-6**. The
-  independent PDAS table (ref. 3) settles it: it lists mu = 17.89e-6 Pa*s at sea
-  level, and 1.458e-6 reproduces that (17.894e-6) while 1.468e-6 would give
-  18.02e-6. We follow **1.458e-6**; ref. 2 has a transcription error.
-
-* **Molar mass of air.** ISO 2533 defines M = 28.964420 kg/kmol
-  (= 0.028964 42 kg/mol); the U.S. Standard Atmosphere 1976 rounds it to
-  28.9644 kg/kmol. We use the ISO value because it is the one that reproduces
-  the standard's own published R = 287.05287 J/(kg*K) and makes the derived
-  sea-level density come out to 1.225 kg/m^3 to 1.4e-9 relative. The 1976
-  rounding gives R = 287.053072 and rho0 = 1.2249992, i.e. it does not close on
-  the published values. Numerically the choice is irrelevant for a UAV
-  (~7e-7 relative in every output), but the ISO value is self-consistent.
-
-* **Tropopause pressure.** Widely published as 22 632.1 Pa. Integrating the
-  barometric formula from the ISO primary constants gives 22 632.04 Pa; the
-  1976 constant set gives 22 632.06 Pa, which is what rounds to the quoted
-  22 632.1. The 2.6e-6 relative spread is pure constant-rounding and is far
-  below any modelling error in the rest of the simulator. We derive the value
-  rather than hard-coding it, and assert agreement with 22 632.1 at 1e-4.
-
-Extending to further layers
----------------------------
-The layer branch is a single :func:`numpy.where` on `h < H_TROPOPAUSE` inside
-:func:`_temperature_pressure_density`. To add the 20-32 km layer (lapse
-+1.0 K/km), replace that `np.where` with :func:`numpy.select` carrying one
-condition and one expression per layer, add the layer's base constants next to
-``T_TROPOPAUSE`` / ``P_TROPOPAUSE``, and raise ``H_MAX``. No other function
-changes: everything downstream consumes (T, p, rho).
-
-Notes
------
-All functions are pure, NumPy-vectorized and free of project imports: ISA
-constants are physical definitions, not design choices, so they live here rather
-than in ``src/config.py``. Scalar input (anything with ``ndim == 0``: Python
-float/int, NumPy scalar, or 0-d array) returns a Python ``float``; ndarray input
-returns an ``ndarray`` of the same shape.
 """
+International Standard Atmosphere model for altitudes from 0 to 20 km.
+
+This module calculates atmospheric properties such as:
+
+- temperature
+- pressure
+- air density
+- speed of sound
+- dynamic viscosity
+
+These values are used by the UAV simulator for aerodynamic, engine, Reynolds
+number and Mach number calculations.
+
+The model follows the International Standard Atmosphere and contains two layers:
+
+1. Troposphere: 0 to 11 km
+   Temperature decreases by 6.5 K for every kilometre of altitude.
+
+2. Lower stratosphere: 11 to 20 km
+   Temperature remains constant at 216.65 K.
+
+The altitude input `h_m` must be geopotential altitude in metres. If geometric
+altitude is available, convert it first using
+`geometric_to_geopotential()`.
+
+This model does not include weather, wind, humidity, non-standard temperatures
+or atmospheric layers above 20 km.
+
+All functions support either a single altitude or a NumPy array of altitudes.
+A single input returns a float, while an array input returns an array with the
+same shape.
+"""
+
 
 from __future__ import annotations
 
@@ -107,8 +55,9 @@ __all__ = [
 ]
 
 # Every public function accepts and returns either of these.
+## This only accepts a List of Float numbers or an Array of Floats(Numpy array).
 FloatOrArray = float | npt.NDArray[np.float64]
-
+# This is the datatype indicator.
 
 # ---------------------------------------------------------------------------
 # Primary ISA constants (definitions - these are fixed by the standard)
@@ -118,21 +67,9 @@ g0: float = 9.80665
 """Standard acceleration of free fall [m/s^2]. PRIMARY (ISO 2533 g_n)."""
 
 R_STAR: float = 8.31432
-"""Universal gas constant [J/(mol*K)]. PRIMARY (ISO 2533 R*).
-
-Deliberately NOT the modern CODATA value (8.314462618). ISA is a *convention*:
-its published tables were generated with 8.31432, so substituting CODATA would
-put this module out of agreement with every ISA table and with the altimetry
-that real aircraft use. Accuracy of the gas constant is not the point here;
-agreement with the standard is.
-"""
-
+# Universal Gas Constant [J/(mol*k)]
 M_AIR: float = 0.02896442
-"""Molar mass of dry air [kg/mol]. PRIMARY (ISO 2533 M = 28.964420 kg/kmol).
-
-The U.S. Standard Atmosphere 1976 rounds this to 0.0289644 kg/mol. We keep the
-full ISO value - see "Where sources disagreed" in the module docstring.
-"""
+# Molar mass of dry air [kg/mol]
 
 GAMMA: float = 1.4
 """Ratio of specific heats of air, cp/cv [-]. PRIMARY (ISO 2533 kappa)."""
@@ -144,22 +81,13 @@ P0: float = 101325.0
 """Sea-level standard pressure [Pa] (1 atm). PRIMARY."""
 
 L_TROPO: float = 0.0065
-"""Troposphere temperature lapse rate [K/m], stored as a POSITIVE decay rate.
-
-ISO 2533 writes this as beta = -6.5 K/km; here it is stored positive and
-subtracted, so `T = T0 - L_TROPO * h`. PRIMARY.
-"""
+"""Troposphere temperature lapse rate [K/m], stored as a POSITIVE decay rate."""
 
 H_TROPOPAUSE: float = 11000.0
 """Geopotential altitude of the tropopause [m]. PRIMARY."""
 
 R_EARTH: float = 6356766.0
-"""Effective Earth radius used by ISA for the geometric/geopotential map [m].
-
-PRIMARY (ISO 2533 r). This is not the mean Earth radius; it is the radius that
-makes the geopotential transformation consistent with g0 at 45 deg 32' 33"
-latitude.
-"""
+"""Effective Earth radius used by ISA for the geometric/geopotential map [m]."""
 
 SUTHERLAND_BETA: float = 1.458e-6
 """Sutherland's law coefficient for air [kg/(m*s*K^0.5)]. PRIMARY (ISO 2533 beta_s)."""
@@ -171,39 +99,20 @@ H_MIN: float = 0.0
 """Lower geopotential-altitude validity limit of this module [m]."""
 
 H_MAX: float = 20000.0
-"""Upper geopotential-altitude validity limit of this module [m].
-
-Top of the lower isothermal stratosphere. Above this the lapse rate becomes
-+1.0 K/km and the formulas here no longer apply.
-"""
-
+"""Upper geopotential-altitude validity limit of this module [m]."""
 
 # ---------------------------------------------------------------------------
 # Derived ISA constants
-#
-# These are *consequences* of the primary constants, not independent
-# definitions. Deriving them (rather than pasting table values) means a typo in
-# a primary constant shows up immediately as a failed check below, instead of
-# silently producing an atmosphere that is internally inconsistent.
 # ---------------------------------------------------------------------------
 
 R_AIR: float = R_STAR / M_AIR
-"""Specific gas constant of dry air [J/(kg*K)]. DERIVED as R* / M.
-
-= 287.052874 (standard's published value: 287.05287).
-"""
+"""Specific gas constant of dry air [J/(kg*K)]. DERIVED as R* / M."""
 
 RHO0: float = P0 / (R_AIR * T0)
-"""Sea-level standard density [kg/m^3]. DERIVED from the ideal gas law.
-
-= 1.2250000 (table value: 1.225). ISA picks M precisely so that this closes.
-"""
+"""Sea-level standard density [kg/m^3]. DERIVED from the ideal gas law."""
 
 BARO_EXPONENT: float = g0 / (L_TROPO * R_AIR)
-"""Exponent of the linear-lapse barometric formula [-]. DERIVED = g0/(L*R).
-
-= 5.2558761. Commonly quoted as 5.2559; computed here so it tracks R exactly.
-"""
+"""Exponent of the linear-lapse barometric formula [-]. DERIVED = g0/(L*R)."""
 
 T_TROPOPAUSE: float = T0 - L_TROPO * H_TROPOPAUSE
 """Temperature at the tropopause [K]. DERIVED = 216.65 (-56.5 degC)."""
@@ -215,11 +124,7 @@ RHO_TROPOPAUSE: float = P_TROPOPAUSE / (R_AIR * T_TROPOPAUSE)
 """Density at the tropopause [kg/m^3]. DERIVED = 0.3639178 (table: 0.363918)."""
 
 SCALE_HEIGHT_STRATO: float = R_AIR * T_TROPOPAUSE / g0
-"""Pressure scale height of the isothermal layer [m]. DERIVED = 6341.62.
-
-In the isothermal layer pressure and density both fall by a factor e every
-SCALE_HEIGHT_STRATO metres; using it keeps the exponential form readable.
-"""
+"""Pressure scale height of the isothermal layer [m]. DERIVED = 6341.62."""
 
 
 # ---------------------------------------------------------------------------
@@ -228,13 +133,6 @@ SCALE_HEIGHT_STRATO metres; using it keeps the exponential form readable.
 
 
 def _check_constant(name: str, computed: float, reference: float, rel_tol: float) -> None:
-    """Raise if a derived constant disagrees with its published table value.
-
-    Uses an explicit ``raise`` rather than the ``assert`` statement because
-    ``assert`` is stripped under ``python -O``, and a silently-wrong atmosphere
-    is exactly the failure mode this guards against. Runs once at import, so it
-    costs nothing in the GA hot loop.
-    """
     error = abs(computed - reference) / abs(reference)
     if not error < rel_tol:
         raise AssertionError(
@@ -244,16 +142,6 @@ def _check_constant(name: str, computed: float, reference: float, rel_tol: float
             "A primary constant is wrong - fix the primary constant, do NOT "
             "loosen this tolerance."
         )
-
-
-# Tolerances reflect how many digits the standard publishes, not our precision.
-#
-# R_AIR: the published 287.05287 is itself rounded to 5 decimals, i.e. it
-# carries +/-5e-6 absolute = +/-1.7e-8 relative, so asserting tighter than that
-# would be asserting against rounding noise. 1e-7 sits just above that floor and
-# is still tight enough to be discriminating: it accepts the ISO 2533 molar mass
-# (1.3e-8 off) and REJECTS the U.S. 1976 rounding M = 0.0289644 (7.0e-7 off).
-# That is the point of this check - it pins which constant set we are using.
 _check_constant("R_AIR = R*/M", R_AIR, 287.05287, 1e-7)
 _check_constant("RHO0 = P0/(R*T0)", RHO0, 1.225, 1e-8)
 _check_constant("BARO_EXPONENT = g0/(L*R)", BARO_EXPONENT, 5.2559, 1e-4)
@@ -269,39 +157,19 @@ _check_constant("SCALE_HEIGHT_STRATO = R*T/g0", SCALE_HEIGHT_STRATO, 6341.6, 1e-
 
 
 def _as_array(x: FloatOrArray) -> npt.NDArray[np.float64]:
-    """Coerce input to a float64 ndarray (possibly 0-d), without copying if able."""
     return np.asarray(x, dtype=np.float64)
 
 
-def _restore_scalar(
-    result: npt.NDArray[np.float64], original: FloatOrArray
-) -> FloatOrArray:
-    """Return a Python float if the caller passed a scalar, else the ndarray.
-
-    ``np.where`` always returns an ndarray, so without this a scalar altitude
-    would yield a 0-d array and leak into downstream arithmetic and into the
-    dataclass fields. Anything with ``ndim == 0`` counts as scalar.
-    """
+def _restore_scalar(result: npt.NDArray[np.float64], original: FloatOrArray) -> FloatOrArray:
     return float(result) if np.ndim(original) == 0 else result
 
 
 def _validate_altitude(h: npt.NDArray[np.float64]) -> None:
-    """Raise ``ValueError`` unless every altitude is finite and within [0, H_MAX].
-
-    Out-of-range altitudes are NOT clamped. This module is called from the
-    fitness function of a genetic algorithm; a mutation that pushes the cruise
-    altitude gene outside the modelled range is a bug in the bounds handling,
-    and silently clamping it would hand the GA a flat region of the search space
-    to exploit instead of surfacing the error.
-    """
-    # Comparisons against NaN are False, so `in_range` also catches NaN and inf.
     in_range = np.isfinite(h) & (h >= H_MIN) & (h <= H_MAX)
     if bool(np.all(in_range)):
         return
 
     offenders = np.atleast_1d(h)[~np.atleast_1d(in_range)]
-    # float(v) rather than repr(v) so the message reads "-1.0", not
-    # "np.float64(-1.0)".
     shown = ", ".join(f"{float(v)!r}" for v in offenders[:5])
     if offenders.size > 5:
         shown += f", ... ({offenders.size} offending values in total)"
@@ -325,28 +193,6 @@ def _checked(h_m: FloatOrArray) -> npt.NDArray[np.float64]:
 
 
 def geometric_to_geopotential(z_m: FloatOrArray) -> FloatOrArray:
-    """Convert geometric (true) altitude to geopotential altitude.
-
-    Equation: ``h = R_EARTH * z / (R_EARTH + z)``.
-
-    Geopotential altitude is the altitude at which a constant gravity ``g0``
-    does the same work against gravity as the real, height-varying ``g`` does up
-    to ``z``. ISA is defined on it, which is why the barometric formulas below
-    may treat ``g`` as constant.
-
-    Args:
-        z_m: Geometric altitude [m]. Scalar or ndarray. Not range-checked - the
-            conversion is pure algebra and is valid well outside this module's
-            0-20 km atmosphere range, so callers may convert first and validate
-            afterwards. It is singular only at ``z = -R_EARTH``.
-
-    Returns:
-        Geopotential altitude [m]; float for scalar input, ndarray otherwise.
-
-    Example:
-        >>> round(geometric_to_geopotential(10000.0), 1)
-        9984.3
-    """
     z = _as_array(z_m)
     # Geometric -> geopotential (ISO 2533). h < z always, by ~0.16 % at 10 km.
     h = (R_EARTH * z) / (R_EARTH + z)
