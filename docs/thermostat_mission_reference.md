@@ -58,10 +58,13 @@ flags identify real boundary encounters during battery-assisted climb and charge
 they did not terminate the mission. The maximum stepwise bus-balance residual was
 2.03×10⁻¹³ kW and the reconstructed fuel residual was −2.27×10⁻¹³ kg.
 
-Run `python -m src.analysis.thermostat_mission` to execute the one named experiment and write:
+The committed snapshot from the named experiment is archived at:
 
-- `deliverables/figures/thermostat_mission_reference.json` — complete machine-readable report;
-- `deliverables/figures/thermostat_mission_phase_regime.csv` — compact phase/regime summary.
+- `deliverables/archive/intermediate_figures/thermostat_mission_reference.json` — complete machine-readable report;
+- `deliverables/archive/intermediate_figures/thermostat_mission_phase_regime.csv` — compact phase/regime summary.
+
+Running `python -m src.analysis.thermostat_mission` again would write a fresh copy to
+`deliverables/figures/`; curation did not rerun that mission.
 
 The report is descriptive. A single untuned thermostat run does not establish superiority or
 optimality relative to PI-ECMS.

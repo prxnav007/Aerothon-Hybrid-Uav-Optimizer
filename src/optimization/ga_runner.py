@@ -52,6 +52,7 @@ DEFAULT_OUTPUT_DIRECTORY = (
     / "ga_production_seed_20260808"
 )
 PRODUCTION_WALL_LIMIT_S = 60.0 * 60.0
+_RUNTIME_DIRECTORY_NAME = "runtime"
 _REFERENCE_TARGETS: dict[str, Any] = {
     "total_mission_seconds": 54876.880130153375,
     "objective_loiter_seconds": 48536.880130153375,
@@ -566,6 +567,7 @@ def _write_result_artifacts(
     gate: GenerationZeroGate,
     *,
     output_directory: Path,
+    runtime_directory: Path,
     elapsed_runtime_s: float,
     bounds: PlantThermostatDesignSpace,
     scenario: FitnessScenario,
@@ -576,7 +578,7 @@ def _write_result_artifacts(
     summary_path = output_directory / "ga_run_summary.md"
     history_rows = [item.to_dict() for item in result.generation_history]
     _atomic_csv(history_path, history_rows, tuple(history_rows[0]))
-    ledger_records = _read_ledger_records(output_directory / "evaluation_ledger.jsonl")
+    ledger_records = _read_ledger_records(runtime_directory / "evaluation_ledger.jsonl")
     candidate_rows = _candidate_rows(ledger_records)
     _atomic_csv(candidates_path, candidate_rows, tuple(candidate_rows[0]))
     payload = _best_payload(
@@ -604,6 +606,7 @@ def run_production_ga(
     if not math.isfinite(limit) or limit <= 0.0:
         raise ValueError("wall_limit_s must be a positive finite number")
     directory = Path(output_directory).resolve()
+    runtime_directory = directory / _RUNTIME_DIRECTORY_NAME
     config, bounds, scenario = production_context()
     mission_evaluator = evaluator or (
         lambda chromosome: evaluate_fitness(
@@ -613,17 +616,17 @@ def run_production_ga(
     started = clock()
     reporter = ProgressReporter(started_at=started, clock=clock, emit=emit)
     codec = fitness_result_codec()
-    resume = _checkpoint_mode(directory)
+    resume = _checkpoint_mode(runtime_directory)
 
     if resume:
-        current_generation = _checkpoint_generation(directory)
+        current_generation = _checkpoint_generation(runtime_directory)
         if current_generation < config.max_generations - 1:
             gate_result = run_ga(
                 mission_evaluator,
                 bounds=bounds,
                 fitness_scenario_id=scenario.identity,
                 config=config,
-                checkpoint_directory=directory,
+                checkpoint_directory=runtime_directory,
                 resume=True,
                 stop_after_generation=current_generation,
                 fitness_codec=codec,
@@ -635,7 +638,7 @@ def run_production_ga(
                 bounds=bounds,
                 fitness_scenario_id=scenario.identity,
                 config=config,
-                checkpoint_directory=directory,
+                checkpoint_directory=runtime_directory,
                 resume=True,
                 fitness_codec=codec,
                 progress=reporter,
@@ -646,14 +649,14 @@ def run_production_ga(
             bounds=bounds,
             fitness_scenario_id=scenario.identity,
             config=config,
-            checkpoint_directory=directory,
+            checkpoint_directory=runtime_directory,
             stop_after_generation=0,
             fitness_codec=codec,
             progress=reporter,
         )
 
     gate = _validate_generation_zero(
-        output_directory=directory, config=config, bounds=bounds
+        output_directory=runtime_directory, config=config, bounds=bounds
     )
     emit(
         f"generation_zero_gate=passed feasible={gate.feasible_candidate_count} "
@@ -667,7 +670,7 @@ def run_production_ga(
             bounds=bounds,
             fitness_scenario_id=scenario.identity,
             config=config,
-            checkpoint_directory=directory,
+            checkpoint_directory=runtime_directory,
             resume=True,
             externally_interrupted=lambda: clock() - started >= limit,
             fitness_codec=codec,
@@ -678,6 +681,7 @@ def run_production_ga(
         result,
         gate,
         output_directory=directory,
+        runtime_directory=runtime_directory,
         elapsed_runtime_s=elapsed,
         bounds=bounds,
         scenario=scenario,

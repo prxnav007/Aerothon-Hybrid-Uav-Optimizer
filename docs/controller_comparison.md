@@ -7,12 +7,12 @@ This study compares controller parameters frozen at their zero-restart-fuel sele
 - The supplied phrase `zero-restart thermostat result` is interpreted as zero restart *fuel*; the mission contains 81 measured OFF-to-ON transitions.
 - No executable historical complete-mission fixed/PI sweep or checkpoint is present. The verification therefore reconstructs a 3-point fixed neighbourhood and a 3 x 3 PI neighbourhood at the historical 0.1 ratio and 2.5 gain resolution.
 - Fixed ratios 1.1 and 1.2 produce the same event-time endurance to 1e-9 s. Ratio 1.1 is retained as the historical lower-ratio representative, not called a unique optimum.
-- The documented `aeroprjct/Scripts/python.exe` is absent; execution used the configured bundled Python with the repository dependency directory.
+- The former project-local interpreter was absent; execution used the configured Python with the repository dependency directory.
 - The existing pure-thermal control group is not a feasible full-mission continuous comparator for this aircraft, so it is not included.
 
 ## Exact selected configurations
 
-The full records are in `controller_configuration_record.json`. Fixed-(s) uses the switching-ratio parameter with adaptation disabled. PI uses a switching-relative base, proportional SoC feedback, no integral state and the shared [0.5, 20] clamp. Thermostat uses causal 60/60 s hard dwell and the existing maximum-feasible ON-power rule.
+The full selected-configuration record is in `deliverables/figure_sources/controller_comparison/controller_configuration_record.json`. Fixed-(s) uses the switching-ratio parameter with adaptation disabled. PI uses a switching-relative base, proportional SoC feedback, no integral state and the shared [0.5, 20] clamp. Thermostat uses causal 60/60 s hard dwell and the existing maximum-feasible ON-power rule.
 
 ## Zero restart-fuel result
 
@@ -58,4 +58,4 @@ Recommended controller: `optimised_thermostat`. The recommendation is practical,
 
 ## Reproducibility
 
-Machine-readable tuned comparison: `C:/Aerothon-Hybrid-Uav-Optimizer/deliverables/figures/controller_comparison.csv`. Every plotted value is read back from its figure-specific CSV before rendering. Full-suite status: 983 passed in 102.22 s on 2026-08-07.
+Machine-readable tuned comparison: `deliverables/figure_sources/controller_comparison/controller_comparison.csv`. Every plotted value was read back from its figure-specific CSV before rendering. Full-suite status: 983 passed in 102.22 s on 2026-08-07.

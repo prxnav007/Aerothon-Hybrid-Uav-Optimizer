@@ -83,12 +83,12 @@ are directional only and are not quantitatively comparable with finer-grid headl
 
 | Artifact family | Classification |
 |---|---|
-| `periodic_dp_convergence.csv` | Historical grid replay; terminal mismatch must be read explicitly |
-| `finite_horizon_dp_15/30/60.csv` | Exploratory unequal-energy supported policies |
-| `finite_horizon_dp_grid*.csv` | Exploratory grid-phase evidence |
-| `finite_horizon_dp_sensitivity.csv` | Directional only; coarse 31-SoC/5-action grid |
-| `thermostat_equal_energy.csv` | Misnamed historical unequal-energy policy data; no fuel bounds |
-| `thermostat_sensitivity.csv` | Conditional-loiter directional sensitivity only |
+| `deliverables/archive/intermediate_figures/periodic_dp_convergence.csv` | Historical grid replay; terminal mismatch must be read explicitly |
+| `deliverables/archive/intermediate_figures/finite_horizon_dp_15/30/60.csv` | Exploratory unequal-energy supported policies |
+| `deliverables/archive/intermediate_figures/finite_horizon_dp_grid*.csv` | Exploratory grid-phase evidence |
+| `deliverables/archive/intermediate_figures/finite_horizon_dp_sensitivity.csv` | Directional only; coarse 31-SoC/5-action grid |
+| `deliverables/archive/intermediate_figures/thermostat_equal_energy.csv` | Misnamed historical unequal-energy policy data; no fuel bounds |
+| `deliverables/archive/intermediate_figures/thermostat_sensitivity.csv` | Conditional-loiter directional sensitivity only |
 
 New CSV writers use `policy_role`, `endpoint_energy_interval_width_kwh`,
 `policy_fuel_values_kg`, `ledger_residual_kwh`, `terminal_target_residual_kwh`, policy hashes,

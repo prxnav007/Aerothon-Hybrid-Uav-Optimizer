@@ -1,7 +1,0 @@
-# Dashboard theme - the chart palette is validated against this light surface
-[theme]
-base = "light"
-backgroundColor = "#fcfcfb"
-secondaryBackgroundColor = "#f9f9f7"
-textColor = "#0b0b0b"
-primaryColor = "#2a78d6"

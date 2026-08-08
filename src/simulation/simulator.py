@@ -143,6 +143,12 @@ class TimeStep:
     battery_active_limit: str = "none"
     controller_feasible: bool = True
     plant_feasible: bool = True
+    engine_available_kw: float | None = None
+    engine_thermal_efficiency: float | None = None
+    battery_current_a: float | None = None
+    battery_open_circuit_voltage_v: float | None = None
+    battery_terminal_voltage_v: float | None = None
+    battery_constraint_terminal_voltage_v: float | None = None
 
 
 @dataclass(frozen=True)
@@ -982,6 +988,18 @@ def run_mission(
                             else False
                         ),
                         battery_active_limit=battery_state.active_limit,
+                        engine_available_kw=aircraft.engine.max_power_kw(
+                            dispatch.atmospheric.density_ratio
+                        ),
+                        engine_thermal_efficiency=engine_state.thermal_efficiency,
+                        battery_current_a=battery_state.current_a,
+                        battery_open_circuit_voltage_v=(
+                            battery_state.open_circuit_voltage_v
+                        ),
+                        battery_terminal_voltage_v=battery_state.terminal_voltage_v,
+                        battery_constraint_terminal_voltage_v=(
+                            battery_state.constraint_terminal_voltage_v
+                        ),
                     )
                 )
 

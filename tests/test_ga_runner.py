@@ -84,6 +84,11 @@ def test_recovery_refuses_an_orphan_checkpoint_or_ledger(tmp_path: Path) -> None
         _checkpoint_mode(tmp_path)
 
 
+def test_production_recovery_artifacts_have_a_dedicated_runtime_directory() -> None:
+    source = Path("src/optimization/ga_runner.py").read_text(encoding="utf-8")
+    assert '_RUNTIME_DIRECTORY_NAME = "runtime"' in source
+
+
 def test_progress_reports_unique_evaluations_and_tracks_best_objective() -> None:
     messages = []
     statistics = SimpleNamespace(

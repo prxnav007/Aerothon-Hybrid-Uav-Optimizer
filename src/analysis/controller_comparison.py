@@ -1403,8 +1403,8 @@ def _write_report(
         "at the historical 0.1 ratio and 2.5 gain resolution.",
         "- Fixed ratios 1.1 and 1.2 produce the same event-time endurance to 1e-9 s. Ratio 1.1 is "
         "retained as the historical lower-ratio representative, not called a unique optimum.",
-        "- The documented `aeroprjct/Scripts/python.exe` is absent; execution used the configured bundled "
-        "Python with the repository dependency directory.",
+        "- The former project-local interpreter was absent; execution used the configured Python "
+        "with the repository dependency directory.",
         "- The existing pure-thermal control group is not a feasible full-mission continuous comparator "
         "for this aircraft, so it is not included.",
         "",
